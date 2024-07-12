@@ -32,6 +32,7 @@ HWND h_dlg;
 HWND h_v_edit;
 HWND h_ng_edit;
 LARGE_INTEGER PerformanceFrequencyL;
+double loop_time;
 
 char play_butt_0_fn[]  = "C:\\dev\\projects\\gol\\images\\play_butt_0.png";
 char play_butt_1_fn[]  = "..\\images\\play_butt_1.png";
@@ -71,11 +72,17 @@ void* bmp_memory = NULL;
 
 int bmp_w;
 int bmp_h;
-int bmp_w1;
-int bmp_h1;
-
+double bmp_w1;
+double bmp_h1;
+int bmp_w1_targ;
+int bmp_h1_targ;
 double zoom_ratio_x;
 double zoom_ratio_y;
+bool zoom_in = false;
+double zoom_speed;
+double pos_zpeed_x;
+double pos_zpeed_y;
+bool zooming = false;
 
 BITMAPINFO bmp_info;
 int bytes_per_pixel = 4;
@@ -136,6 +143,7 @@ double frame_dur = 0.017; // 60fps
 // cursor 
 double cursor_timer = 0;
 
+
 // input 
 bool go_butt_clkd = false;
 bool go_butt_down = false;
@@ -195,6 +203,8 @@ struct r_point {
 };
 
 r_point bmp_pos;
+r_point bmp_pos_targ;
+
 int map_box_w = 1;
 int map_w = 300;
 int map_h = 300;
@@ -831,32 +841,44 @@ wnd_callback(HWND wnd,
     case WM_MOUSEWHEEL:
     {
         int delta = int(GET_WHEEL_DELTA_WPARAM(wp));
-        if((bmp_w1 - delta / 2) > 8*box_w)
+        bool zoom_chng_dir = false;
+        if (zoom_in && delta < 0 || !zoom_in && delta>0)
+            zoom_chng_dir = true;
+        double new_w1_targ = zoom_chng_dir ? bmp_w1 - delta : bmp_w1_targ - delta;
+        if (zoom_chng_dir)
+            zooming = false;
+        if(new_w1_targ > 8*box_w) // setting a limit for zoom in  
         {
-            int new_box_w = box_w * bmp_w / (bmp_w1 - delta / 2);
-            if (new_box_w > 12)
+            int new_box_w = box_w * bmp_w / new_w1_targ;
+            if (new_box_w > 12) // setting a limit for zoom out 
             {
-                if (bmp_w1 - delta / 2 > 0)
+                if (!zooming)
                 {
-                    bmp_w1 -= delta / 2;
-                    bmp_pos.x += delta / 4;
-                    if (bmp_pos.x + bmp_w1 >= nb_box_w * box_w)
-                        bmp_pos.x = nb_box_w * box_w - bmp_w1;
-                    if (bmp_pos.x < 0)
-                        bmp_pos.x = 0;
+                    bmp_pos_targ = bmp_pos;
+                    zooming = true;
                 }
+                zoom_in = delta > 0 ? true : false;
+                bmp_w1_targ = new_w1_targ;
+                
+                bmp_pos_targ.x = mouse_coords.x * (bmp_w1 - bmp_w1_targ)/bmp_w + bmp_pos.x;
+                
+                if (bmp_pos_targ.x + bmp_w1_targ >= nb_box_w * box_w)
+                    bmp_pos_targ.x = nb_box_w * box_w - bmp_w1_targ;
+                if (bmp_pos_targ.x < 0)
+                    bmp_pos_targ.x = 0;
 
-                bmp_h1 = bmp_h * bmp_w1 / bmp_w;
-                bmp_pos.y += delta / 4;
-                if (bmp_pos.y + bmp_h1 >= nb_box_h * box_h)
-                    bmp_pos.y = nb_box_h * box_h - bmp_h1;
-                if (bmp_pos.y < 0)
-                    bmp_pos.y = 0;
+                bmp_h1_targ = bmp_h * bmp_w1_targ / bmp_w;
+                bmp_pos_targ.y = mouse_coords.y * (bmp_h1 - bmp_h1_targ)/bmp_h + bmp_pos.y;
+                if (bmp_pos_targ.y + bmp_h1_targ >= nb_box_h * box_h)
+                    bmp_pos_targ.y = nb_box_h * box_h - bmp_h1_targ;
+                if (bmp_pos_targ.y < 0)
+                    bmp_pos_targ.y = 0;
+                zoom_speed = std::abs(bmp_w1_targ - bmp_w1)*3.5;
+                pos_zpeed_x = zoom_speed * std::abs(bmp_pos_targ.x - bmp_pos.x)/ std::abs(bmp_w1_targ - bmp_w1);
+                pos_zpeed_y = zoom_speed * std::abs(bmp_pos_targ.y - bmp_pos.y) / std::abs(bmp_w1_targ - bmp_w1);
+
             }
         }
-        
-        zoom_ratio_x = double(bmp_w) / bmp_w1;
-        zoom_ratio_y = double(bmp_h) / bmp_h1;
 
     }break;
             
@@ -1312,6 +1334,8 @@ WinMain(HINSTANCE Instance,
     bmp_h = 0.8*GetSystemMetrics(SM_CYSCREEN);
     bmp_w1 = bmp_w;
     bmp_h1 = bmp_h;
+    bmp_w1_targ = bmp_w1;
+    bmp_h1_targ = bmp_h1;
     zoom_ratio_x = bmp_w / bmp_w1;
     zoom_ratio_y = bmp_h / bmp_h1;
     bmp_pos = { double(nb_box_w * box_w - bmp_w) / 2, double(nb_box_h * box_h - bmp_h) / 2 };
@@ -1431,8 +1455,8 @@ WinMain(HINSTANCE Instance,
             region_pos.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
             bmp_region_zone.x = region_pos.x;
             bmp_region_zone.y = region_pos.y;
-            bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
-            bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
+            bmp_region_zone.w = int(bmp_w1)*map_box_w / box_w;
+            bmp_region_zone.h = int(bmp_h1) * map_box_w / box_h;
 
             hide.pos.x = region_slct_zone.x + region_slct_zone.w - hide.w + int(menu_zone.w * 3.0/800);
             hide.pos.y = region_slct_zone.y - hide.h - int(menu_zone.h * 3.0/120);
@@ -1497,7 +1521,7 @@ WinMain(HINSTANCE Instance,
                     sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
 
                 // update bitmap position
-                if (my_mouse.l_down)
+                if (my_mouse.l_down && !zooming)
                 {
                     if (!in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone) && !mov_region)
                     {
@@ -1708,6 +1732,60 @@ WinMain(HINSTANCE Instance,
                 // normal simulation mode (<=> target_step == -1)
                 if (target_step == -1)
                 {
+                    // handling zoom smoothness
+                    if (bmp_w1 != bmp_w1_targ || bmp_h1 != bmp_h1_targ)
+                    {
+                        int zoom_sign = zoom_in ? -1 : 1;
+                        bmp_w1 += zoom_sign * zoom_speed * loop_time;
+                        bmp_h1 = (bmp_w1 /bmp_w) * bmp_h;
+                        
+                        bmp_pos.x += -zoom_sign * pos_zpeed_x * loop_time;
+                        bmp_pos.y += -zoom_sign * pos_zpeed_y * loop_time;
+                        if (zoom_in)
+                        {
+                            if (bmp_w1 < bmp_w1_targ)
+                            {
+                                bmp_w1 = bmp_w1_targ;
+                                bmp_pos.x = bmp_pos_targ.x;
+                                zooming = false;
+                            }
+                            if (bmp_h1 < bmp_h1_targ)
+                            {
+                                bmp_h1 = bmp_h1_targ;
+                                bmp_pos.y = bmp_pos_targ.y;
+                                zooming = false;
+                            }
+                        }
+                        else
+                        {
+                            if (bmp_w1 > bmp_w1_targ)
+                            {
+                                bmp_w1 = bmp_w1_targ;
+                                bmp_pos.x = bmp_pos_targ.x;
+                                zooming = false;
+
+                            }
+                            if (bmp_h1 > bmp_h1_targ)
+                            {
+                                bmp_h1 = bmp_h1_targ;
+                                bmp_pos.y = bmp_pos_targ.y;
+                                zooming = false;
+                            }
+                        }
+                        zoom_ratio_x = double(bmp_w) / bmp_w1;
+                        zoom_ratio_y = double(bmp_h) / bmp_h1;
+                        
+                        if (bmp_pos.x < 0)
+                            bmp_pos.x = 0;
+                        if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
+                            bmp_pos.x = nb_box_w * box_w - bmp_w1;
+                        if (bmp_pos.y < 0)
+                            bmp_pos.y = 0;
+                        if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
+                            bmp_pos.y = nb_box_h * box_h - bmp_h1;
+
+                    }
+
                     // grid inserting 
                     insert_bgnd_color(black);
                     int i = 1;
@@ -1726,7 +1804,7 @@ WinMain(HINSTANCE Instance,
                         insert_color_to_zone(white, { 0,line_y, bmp_w, 2 });
                         i++;
                     }
-
+                    
                     // updating the state of bitmap
                     for (int i = int(bmp_pos.x / box_w); i < int((bmp_pos.x + bmp_w1) / box_w) + 1; i++)
                     {
@@ -2030,7 +2108,7 @@ WinMain(HINSTANCE Instance,
                 }
                 
                 QueryPerformanceCounter(&end_time);
-                double loop_time = double(end_time.QuadPart - begin_time.QuadPart) / double(PerformanceFrequency);
+                loop_time = double(end_time.QuadPart - begin_time.QuadPart) / double(PerformanceFrequency);
                 
                 sim_timer += loop_time;
                 cursor_timer += loop_time;
