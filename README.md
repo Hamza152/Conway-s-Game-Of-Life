@@ -21,5 +21,5 @@ As of the UI:
 &emsp;&emsp;* Left click mouse and drag or use the overview map on the bottom right to navigate through grid.   
 &emsp;&emsp;* Zoom In and out using the mouse wheel.   
 &emsp;&emsp;* Save patterns you find interesting either as:   
-&emsp;&emsp;&emsp;&emsp; - ".txt" format which can be opened by the application. Useful for later exploration and for sharing patterns with friends.
+&emsp;&emsp;&emsp;&emsp; - ".txt" format which can be opened by the application. Useful for later exploration and for sharing patterns with friends.  
 &emsp;&emsp;&emsp;&emsp; - ".gif" animation specifying the desired area, number of generations and the simulation speed.    
