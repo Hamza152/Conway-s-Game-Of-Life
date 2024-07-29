@@ -177,12 +177,6 @@ int gen_ps = 1;
 bool dlg_crtd = false;
 std::wstring gif_path;
 
-bool moving_started = false;
-double mouse_dist_x = 0;
-double mouse_dist_y = 0;
-double prev_mouse_dist_x = 0;
-double prev_mouse_dist_y = 0;
-
 bool int_bar_slctd = false;
 bool show_cursor = false;
 std::vector<char> step_str(5);
@@ -358,29 +352,15 @@ void insert_bgnd_color(uint32 color)
 void insert_color_to_zone(uint32 color, recta zone, recta limits = {-1,-1,INT_MAX,INT_MAX})
 {
     uint32* pixel = (uint32*)bmp_memory;
-    // check zone and limits intersection with client area, and zone and limits intersection
-    if (!zone_intersect(zone, { 0,0,bmp_w,bmp_h }) || !zone_intersect(limits, {0,0,bmp_w, bmp_h}) || !zone_intersect(zone , limits))
-        return;
-   
-    for(int y = zone.y ; y < zone.y + zone.h && y < bmp_h; y++)
-    {
-        if (y <= 0)
-            y = 0;
-        if (y >= limits.y + limits.h)
-            break;
-        if (y < limits.y)
-            y = limits.y;
-        for (int x = zone.x ; x < zone.x + zone.w && x < bmp_w; x++)
-        {
-            if (x <= 0)
-                x = 0;
-            if (x >= limits.x + limits.w)
-                break;
-            if (x < limits.x)
-                x = limits.x;
+    
+    int y = max(0, max(zone.y, limits.y));
+    int x0 = max(0, max(zone.x, limits.x));
+    int y_max = min(bmp_h, min(zone.y + zone.h, limits.y + limits.h));
+    int x_max = min(bmp_w, min(zone.x + zone.w, limits.x + limits.w));
+
+    for(; y < y_max; y++)
+        for (int x = x0; x < x_max; x++)
             pixel[y * bmp_w + x] = color;
-        }
-    }
 }
 
 void insert_recta(recta my_rect, uint32 color, int bordr_w)
@@ -404,14 +384,15 @@ void insert_im(image im, bool to_blit = false)
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask= 0xff000000;
 
-    for (int y = im.pos.y; y < im.pos.y + im.h && y < bmp_h; y++)
+    int x0 = max(0, im.pos.x);
+    int y = max(0, im.pos.y);
+    int x_max = min(bmp_w, im.pos.x + im.w);
+    int y_max  = min(bmp_h, im.pos.y + im.h);
+    
+    for (; y < y_max; y++)
     {
-        if (y <= 0)
-            y = 0;
-        for (int x = im.pos.x ; x < im.pos.x + im.w && x < bmp_w; x++)
+        for (int x = x0 ; x < x_max; x++)
         {
-            if (x <= 0)
-                x = 0;
             uint32 p = im.pixels[(y - im.pos.y) * im.w + x - im.pos.x];
             if (p & tr_mask)
             {
@@ -428,28 +409,19 @@ void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_colo
 {
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask = 0xff000000;
-    if (!zone_intersect(dest_zone, { 0,0,bmp_w,bmp_h }) || !zone_intersect(limits, { 0,0,bmp_w, bmp_h }) || !zone_intersect(dest_zone, limits))
-        return;
-    for (int y = dest_zone.y ; y < dest_zone.y + dest_zone.h && y < bmp_h; y++)
+    
+    int y = max(0, max(dest_zone.y, limits.y));
+    int x0 = max(0, max(dest_zone.x, limits.x));
+    int y_max = min(bmp_h, min(dest_zone.y + dest_zone.h, limits.y + limits.h));
+    int x_max = min(bmp_w, min(dest_zone.x + dest_zone.w, limits.x + limits.w));
+    double strch_y = double(dest_zone.h - 1) / (src_zone.h - 1);
+    double strch_x = double(dest_zone.w - 1) / (src_zone.w - 1);
+    for ( ; y < y_max ; y++)
     {
-        if (y <= 0)
-            y = 0;
-        if (y >= limits.y + limits.h)
-            break;
-        if (y < limits.y)
-            y = limits.y;
-        for (int x = dest_zone.x ; x < dest_zone.x + dest_zone.w && x < bmp_w; x++)
+        for (int x = x0; x < x_max; x++)
         {
-            if (x <= 0)
-                x = 0;
-            if (x <= 0)
-                x = 0;
-            if (x >= limits.x + limits.w)
-                break;
-            if (x < limits.x)
-                x = limits.x;
-            int src_y = (y - dest_zone.y)*(double(src_zone.h - 1)/(dest_zone.h - 1)) + src_zone.y;
-            int src_x = (x - dest_zone.x)*(double(src_zone.w - 1)/(dest_zone.w - 1)) + src_zone.x;
+            int src_y = (y - dest_zone.y)/ strch_y + src_zone.y;
+            int src_x = (x - dest_zone.x)/ strch_x + src_zone.x;
 
             uint32 p = src_im.pixels[src_y * src_im.w + src_x];
             if (p & tr_mask)
@@ -474,14 +446,15 @@ void insert_from_im(image src_im, recta src_zone, point pos)
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask = 0xff000000;
 
-    for (int y = pos.y; y < pos.y + src_zone.h && y < bmp_h; y++)
+    int x0 = max(0, pos.x);
+    int y = max(0, pos.y);
+    int x_max = min(bmp_w, pos.x + src_zone.w);
+    int y_max = min(bmp_h, pos.y + src_zone.h);
+
+    for (; y < y_max; y++)
     {
-        if (y <= 0)
-            y = 0;
-        for (int x = pos.x ; x < pos.x + src_zone.w && x < bmp_w; x++)
+        for (int x = x0; x <  x_max; x++)
         {
-            if (x <= 0)
-                x = 0;
             int src_y = y - pos.y + src_zone.y;
             int src_x = x - pos.x + src_zone.x;
 
@@ -501,7 +474,6 @@ void insert_num(char num, recta dest_zone)
 {
     int num_idx = num - '0';
     recta num_zone = { num_idx * num_width, 0, num_width, num_height };
-    
     instrch_from_im(num_letters, num_zone, dest_zone);
 }
 
@@ -514,13 +486,14 @@ bool in_zone(POINT m_coords, recta zone)
     return false;
 }
 
-
 void insert_text(const char* my_text, point pos, point char_size, bool to_color = false, uint32 color = black, recta limits = { -1,-1,INT_MAX,INT_MAX })
 {
+
+    recta crc_src_zone = {0 , 16, letter_w, letter_h };
+    recta crc_dest_zone = {0 , pos.y, char_size.x, char_size.y };
     for (int i = 0; my_text[i] != '\0'; i++)
     {
         char c = my_text[i];
-
         if (c == '.')
         {
             insert_color_to_zone(black, { pos.x + i * char_size.x + char_size.x/3 , pos.y + 5*char_size.y/6,char_size.x/3, char_size.y/6 }, limits);
@@ -530,8 +503,8 @@ void insert_text(const char* my_text, point pos, point char_size, bool to_color 
             if (islower(c))
                 c = toupper(c);
             int index = c - 'A';
-            recta crc_src_zone = { index * letter_w, 16, letter_w, letter_h };
-            recta crc_dest_zone = { pos.x + i * char_size.x, pos.y, char_size.x, char_size.y};
+            crc_src_zone.x = index * letter_w;
+            crc_dest_zone.x = pos.x + i * char_size.x;
             instrch_from_im(num_letters, crc_src_zone, crc_dest_zone, to_color, color, limits);
         }
     }
@@ -544,17 +517,19 @@ void insert_text_to_zone(const char* my_text, recta dest_zone,bool to_color = fa
         crc_nbr++;
     int dest_crc_w = dest_zone.w / crc_nbr;
     int dest_crc_h = dest_zone.h;
+    
+    recta crc_src_zone = {0 , 16, letter_w, letter_h };
+    recta crc_dest_zone = {0 , dest_zone.y, dest_crc_w, dest_crc_h };
     for (int i = 0; i < crc_nbr; i++)
     {
         char c = my_text[i];
-
         if (c != ' ')
         {
             if (islower(c))
                 c = toupper(c);
             int index = c - 'A';
-            recta crc_src_zone = { index * letter_w, 16, letter_w, letter_h };
-            recta crc_dest_zone = { dest_zone.x + i * dest_crc_w, dest_zone.y, dest_crc_w, dest_crc_h };
+            crc_src_zone.x = index * letter_w;
+            crc_dest_zone.x = dest_zone.x + i * dest_crc_w;
             instrch_from_im(num_letters, crc_src_zone, crc_dest_zone, to_color, color);
         }
     }
@@ -568,11 +543,7 @@ void insert_sim_vel()
     int crc_w = vel_zone.w / 3;
     insert_num(char(int(sim_freq) + '0'), { vel_zone.x, vel_zone.y, crc_w, vel_zone.h });
     insert_from_im(num_letters, dot_zone, { vel_zone.x + crc_w , vel_zone.y + num_height - dot_zone.h });
-
-    if (int(sim_freq * 10) % 10 == 0)
-        insert_num('0', { vel_zone.x + crc_w + dot_zone.w, vel_zone.y, crc_w, vel_zone.h });
-    else
-        insert_num(char(int(sim_freq * 10) % 10) + '0', { vel_zone.x + crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
+    insert_num(int(sim_freq * 10) % 10 + '0', { vel_zone.x + crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
 }
 
 void insert_actual_step()
@@ -595,12 +566,10 @@ void insert_actual_step()
             nb_digits++;
             nbr = actual_step / pow(10, nb_digits);
         }
-        dig_init_pos_x = actual_step_zone.x + actual_step_zone.w / 2 - nb_digits * num_width / 2;
-        for (int i = 0; i < nb_digits; i++)
+        for (int i = 0; i < nb_digits; i++) 
             insert_num(char(act_step_str[nb_digits - i - 1]) + '0', { dig_init_pos_x + i * num_width, actual_step_zone.y + actual_step_zone.h + 20, num_width, num_height });
     }
     insert_out_recta({ dig_init_pos_x - 2, actual_step_zone.y + actual_step_zone.h + 18, nb_digits * num_width + 4, num_height + 4 }, orange, 5);
-
 }
 
 bool is_neigh_alive(int neigh_x, int neigh_y)
@@ -612,13 +581,15 @@ bool is_neigh_alive(int neigh_x, int neigh_y)
 }
 
 void one_step_ahead()
-{
-    
-    for (int j = top_lim - 1; j <= bottom_lim + 1; j++)
+{   
+    int j0 = max(1, top_lim - 1);
+    int i0 = max(1, left_lim - 1);
+    int j_max = min(bottom_lim + 1, nb_box_h - 2);
+    int i_max = min(right_lim + 1, nb_box_w - 2);
+    for (int j = j0; j <= j_max; j++)
     {
-        for (int i = left_lim - 1; i <= right_lim + 1; i++)
+        for (int i = i0; i <= i_max; i++)
         {
-
             int neigh_alive = 0;
             int neigh_x = i - 1, neigh_y = j - 1;
             neigh_alive += int(is_neigh_alive(neigh_x, neigh_y));
@@ -666,10 +637,12 @@ void one_step_ahead()
                 }
             }
             grid[j * nb_box_w + i].updated = true;
+            if(j >= j0 +2)
+                grid[(j-2) * nb_box_w + i].updated = false;
         }
     }
 
-    for (int j = top_lim - 1; j <= bottom_lim + 1; j++)
+    for (int j = bottom_lim - 1; j <= bottom_lim + 1; j++)
     {
         for (int i = left_lim - 1; i <= right_lim + 1; i++)
         {
@@ -707,9 +680,6 @@ recta get_im_zone(image my_im)
 
 void reinit_grid()
 {
-    //delete[] grid;
-    //grid = new box[nb_boxes];
-  
     for (int i = left_lim; i <= right_lim; i++)
         for (int j = top_lim; j <= bottom_lim ; j++)
             grid[j * nb_box_w + i].stt = false;
@@ -741,7 +711,6 @@ void insert_dlg_box(std::string str, std::string title, recta zone, uint32 color
         char_size.y --;
 
         ok_zone.h = 2 * char_size.y;
-
 
         txt_zone.x = zone.x + char_size.x;
         txt_zone.y = zone.y + 5 * char_size.y;
@@ -1004,60 +973,60 @@ wnd_callback(HWND wnd,
         my_mouse.l_down = true;
         mouse_coords_ldown.x = GET_X_LPARAM(lp);
         mouse_coords_ldown.y = GET_Y_LPARAM(lp);
-        mouse_dist_x = 0;
-        mouse_dist_y = 0;
-
-        if (in_zone(mouse_coords_ldown, step_slct_zone))
+        if(normal_mode)
         {
-            show_cursor = true;
-            cursor_timer = 0;
-            slct_mode = true;
-            if (slctd_nbr > 0)
-                slctd_nbr = 0;
-            int block = (mouse_coords_ldown.x - initial_curs_pos.x + num_width / 2) / num_width;
-            if (block <= num_crctrs)
-                my_cursor.pos.x = initial_curs_pos.x + block * num_width;
+            if (in_zone(mouse_coords_ldown, step_slct_zone))
+            {
+                show_cursor = true;
+                cursor_timer = 0;
+                slct_mode = true;
+                if (slctd_nbr > 0)
+                    slctd_nbr = 0;
+                int block = (mouse_coords_ldown.x - initial_curs_pos.x + num_width / 2) / num_width;
+                if (block <= num_crctrs)
+                    my_cursor.pos.x = initial_curs_pos.x + block * num_width;
+                else
+                    my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
+                initial_slct_x = my_cursor.pos.x;
+            }
             else
-                my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
-            initial_slct_x = my_cursor.pos.x;
-        }
-        else
-        {
-            show_cursor = false;
-            slctd_nbr = 0;
-        }
-        if (in_zone(mouse_coords_ldown, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
-            int_bar_slctd = true;
-        if (in_zone(mouse_coords_ldown, go_butt_zone))
-            go_butt_down = true;
-        if (in_zone(mouse_coords_ldown, play_butt_zone))
-            plpau_down = true;
-        if (in_zone(mouse_coords_ldown, reinit_butt_zone))
-            reinit_down = true;
-        if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
-            next_down = true;
-        if (show_map && in_zone(mouse_coords_ldown, region_slct_zone))
-        {
-            mov_region = true;
-            int last_x = region_pos.x;
-            int last_y = region_pos.y;
+            {
+                show_cursor = false;
+                slctd_nbr = 0;
+            }
+            if (in_zone(mouse_coords_ldown, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
+                int_bar_slctd = true;
+            else if (in_zone(mouse_coords_ldown, go_butt_zone))
+                go_butt_down = true;
+            else if (in_zone(mouse_coords_ldown, play_butt_zone))
+                plpau_down = true;
+            else if (in_zone(mouse_coords_ldown, reinit_butt_zone))
+                reinit_down = true;
+            else if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
+                next_down = true;
+            else if (show_map && in_zone(mouse_coords_ldown, region_slct_zone))
+            {
+                mov_region = true;
+                int last_x = region_pos.x;
+                int last_y = region_pos.y;
 
-            region_pos.x = mouse_coords_ldown.x - bmp_region_zone.w / 2;
-            region_pos.y = mouse_coords_ldown.y - bmp_region_zone.h / 2;
-            if (region_pos.x <= region_slct_zone.x)
-                region_pos.x = region_slct_zone.x + 1;
-            if (region_pos.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                region_pos.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w - 1;
-            if (region_pos.y <= region_slct_zone.y)
-                region_pos.y = region_slct_zone.y + 1;
-            if (region_pos.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                region_pos.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h - 1;
-            
-            bmp_pos.x += (region_pos.x - last_x) * box_w / map_box_w;
-            bmp_pos.y += (region_pos.y - last_y) * box_w / map_box_w;
+                region_pos.x = mouse_coords_ldown.x - bmp_region_zone.w / 2;
+                region_pos.y = mouse_coords_ldown.y - bmp_region_zone.h / 2;
+                if (region_pos.x <= region_slct_zone.x)
+                    region_pos.x = region_slct_zone.x + 1;
+                if (region_pos.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
+                    region_pos.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w - 1;
+                if (region_pos.y <= region_slct_zone.y)
+                    region_pos.y = region_slct_zone.y + 1;
+                if (region_pos.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
+                    region_pos.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h - 1;
 
+                bmp_pos.x += (region_pos.x - last_x) * box_w / map_box_w;
+                bmp_pos.y += (region_pos.y - last_y) * box_w / map_box_w;
+
+            }
         }
-        if(open_file)
+        else if(open_file)
         {
             if(scrl_exist)
             {
@@ -1158,22 +1127,24 @@ wnd_callback(HWND wnd,
     }break;
     case WM_RBUTTONDOWN:
     {
-
         mouse_coords_rdown.x = GET_X_LPARAM(lp);
         mouse_coords_rdown.y = GET_Y_LPARAM(lp);
         my_mouse.r_down = true;
-        recta sh_hide_zone;
-        recta map_zone = { 0,0,0,0 };
-        if (show_map)
+        if (gif_saving)
         {
-            sh_hide_zone = get_im_zone(hide);
-            map_zone = region_slct_zone;
-        }
-        else
-            sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
-        if (gif_saving && !in_zone(mouse_coords_rdown, menu_zone) && !in_zone(mouse_coords_rdown, sh_hide_zone) && !in_zone(mouse_coords_rdown, map_zone))
-        {
-            gif_slct_mode = true;
+            recta sh_hide_zone;
+            recta map_zone = { 0,0,0,0 };
+            if (show_map)
+            {
+                sh_hide_zone = get_im_zone(hide);
+                map_zone = region_slct_zone;
+            }
+            else
+                sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
+            if (!in_zone(mouse_coords_rdown, menu_zone) && !in_zone(mouse_coords_rdown, sh_hide_zone) && !in_zone(mouse_coords_rdown, map_zone))
+            {
+                gif_slct_mode = true;
+            }
         }
     }break;
     case WM_RBUTTONUP:
@@ -1183,42 +1154,48 @@ wnd_callback(HWND wnd,
 
         my_mouse.r_down = false;
 
-        if (gif_saving && in_zone(mouse_coords_rup, { 0,0,bmp_w,bmp_h }) && in_zone(mouse_coords_rdown, { 0,0,bmp_w,bmp_h }))
+        if (gif_saving)
         {
-            gif_rg0 = get_clk_box(mouse_coords_rdown);
-            gif_rg1 = get_clk_box(mouse_coords_rup);
-            point temp = gif_rg0;
-            gif_rg0 = {min(temp.x, gif_rg1.x), min(temp.y, gif_rg1.y)};
-            gif_rg1 = { max(temp.x, gif_rg1.x), max(temp.y, gif_rg1.y) };
+            if(in_zone(mouse_coords_rup, { 0,0,bmp_w,bmp_h }) && in_zone(mouse_coords_rdown, { 0,0,bmp_w,bmp_h }))
+            {
+                gif_rg0 = get_clk_box(mouse_coords_rdown);
+                gif_rg1 = get_clk_box(mouse_coords_rup);
+                point temp = gif_rg0;
+                gif_rg0 = { min(temp.x, gif_rg1.x), min(temp.y, gif_rg1.y) };
+                gif_rg1 = { max(temp.x, gif_rg1.x), max(temp.y, gif_rg1.y) };
 
-            gif_slct_mode = false;
-            gif_rg_slctd = true;
-            HCURSOR h_curs = LoadCursor(NULL, IDC_WAIT);
-            SetCursor(h_curs);
+                gif_slct_mode = false;
+                gif_rg_slctd = true;
+                HCURSOR h_curs = LoadCursor(NULL, IDC_WAIT);
+                SetCursor(h_curs);
+            }
         }
     }break;
 
     case WM_LBUTTONDBLCLK:
     {
         my_mouse.l_down = true;
-        if (in_zone(mouse_coords_lup, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
-            int_bar_slctd = true;
-        if (in_zone(mouse_coords_ldown, go_butt_zone))
-            go_butt_down = true;
-        if (in_zone(mouse_coords_ldown, play_butt_zone))
-            plpau_down = true;
-        if (in_zone(mouse_coords_ldown, reinit_butt_zone))
-            reinit_down = true;
-        if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
-            next_down = true;
-        if (in_zone(mouse_coords_lup, step_slct_zone))
+        if(normal_mode)
         {
-            my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
-            slctd_nbr = num_crctrs;
-            for (int i = 0; i < slctd_nbr; i++)
-                slctd_nums[i] = i;
+            if (in_zone(mouse_coords_lup, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
+                int_bar_slctd = true;
+            else if (in_zone(mouse_coords_ldown, go_butt_zone))
+                go_butt_down = true;
+            else if (in_zone(mouse_coords_ldown, play_butt_zone))
+                plpau_down = true;
+            else if (in_zone(mouse_coords_ldown, reinit_butt_zone))
+                reinit_down = true;
+            else if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
+                next_down = true;
+            else if (in_zone(mouse_coords_lup, step_slct_zone))
+            {
+                my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
+                slctd_nbr = num_crctrs;
+                for (int i = 0; i < slctd_nbr; i++)
+                    slctd_nums[i] = i;
+            }
         }
-        if (open_file )
+        else if (open_file )
         {
             if(in_zone(mouse_coords, draw_f_zone))
             {
@@ -1286,7 +1263,7 @@ wnd_callback(HWND wnd,
                 scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
             }
         }
-        else
+        else if(normal_mode)
         {
             bool zoom_chng_dir = false;
             if (zoom_in && delta < 0 || !zoom_in && delta>0)
@@ -1532,7 +1509,6 @@ wnd_callback(HWND wnd,
         break;
     case WM_PAINT:
     {
-        //OutputDebugStringA("WM_PAINT\n");
         PAINTSTRUCT Paint;
         HDC DeviceContext = BeginPaint(wnd, &Paint);
 
@@ -1553,7 +1529,6 @@ wnd_callback(HWND wnd,
 
     case WM_ACTIVATEAPP:
     {
-        //OutputDebugStringA("WM_ACTIVATEAPP\n");
     } break;
 
     case WM_DESTROY:
@@ -1563,7 +1538,6 @@ wnd_callback(HWND wnd,
 
     default:
     {
-        //OutputDebugStringA("WM_DEFAULT\n");
         result = DefWindowProc(wnd, msg, wp, lp);
     } break;
     }
@@ -1589,24 +1563,6 @@ void insert_region_slct()
                 pixel[j * bmp_w + i] = black;
         }
     }
-
-
-    //int i = 1;
-    //int line_x = 0;
-    //while (line_x < map_w + region_slct_zone.x)
-    //{
-    //    line_x = (int(map_pos.x / map_box_w) + i) * map_box_w - map_pos.x + region_slct_zone.x;
-    //    insert_color_to_zone(white, { line_x, region_slct_zone.y, 1, region_slct_zone.h });
-    //    i++;
-    //}
-    //i = 1;
-    //int line_y = 0;
-    //while (line_y < map_w + region_slct_zone.y)
-    //{
-    //    line_y = (int(map_pos.y / map_box_w) + i) * map_box_w - map_pos.y + region_slct_zone.y;
-    //    insert_color_to_zone(white, { region_slct_zone.x,line_y, region_slct_zone.w, 1 });
-    //    i++;
-    //}
 
     insert_out_recta(region_slct_zone, l_blue, 3);
     insert_out_recta({ bmp_region_zone.x + 2, bmp_region_zone.y + 2, bmp_region_zone.w - 4, bmp_region_zone.h - 4 }, orange, 2);
@@ -1778,72 +1734,6 @@ void save_config(HWND wnd)
 
 }
 
-//
-//void init_from_file(HWND wnd)
-//{
-//    // Create an instance of IFileDialog
-//    IFileDialog* pfd;
-//    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
-//    std::wstring file_path;
-//
-//    if (SUCCEEDED(hr))
-//    {
-//        while(true)
-//        {
-//            COMDLG_FILTERSPEC filterSpec[] = { L"Text Files", L"*.txt" };
-//            hr = pfd->SetFileTypes(ARRAYSIZE(filterSpec), filterSpec);
-//            hr = pfd->SetDefaultExtension(L"txt");
-//            if (FAILED(hr)) {
-//                return;
-//            }
-//
-//            hr = pfd->Show(wnd);
-//            if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
-//                pfd->Release();
-//                return; 
-//            }
-//            else if (FAILED(hr)) {
-//                pfd->Release();
-//                return;
-//            }
-//            if (SUCCEEDED(hr))
-//            {
-//                IShellItem* pItem;
-//                hr = pfd->GetResult(&pItem);
-//                if (SUCCEEDED(hr))
-//                {
-//                    PWSTR pszFilePath;
-//                    hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
-//                    if (SUCCEEDED(hr))
-//                    {
-//                        file_path = pszFilePath;
-//                        CoTaskMemFree(pszFilePath);
-//                        if (f_ext(file_path.c_str()) != L".txt")
-//                            MessageBoxW(NULL, L"Please choose a file with a .txt extension.", L"Invalid File Type", MB_OK | MB_ICONERROR);
-//                        else
-//                            break;
-//                    }
-//                    pItem->Release();
-//                }
-//            }
-//            pfd->Release();
-//        }
-//    }
-//
-//    std::wifstream my_file;
-//    my_file.open(file_path.c_str());
-//    if (my_file.is_open())
-//    {
-//        int k;
-//        for (int i = 0; i < nb_box_w; i++)
-//            for (int j = 0 ; j < nb_box_h; j++)
-//            {
-//                my_file >> k;
-//                grid[j * nb_box_w + i].stt = (k != 0);
-//            }
-//    }
-//    my_file.close();
-//}
 void get_curr_dir(std::string& curr_dir)
 {
     char fn[MAX_PATH];
@@ -1938,7 +1828,6 @@ WinMain(HINSTANCE Instance,
 
         if (wnd)
         {
-            // Attach the menu to the window
             // load images
             main_wnd = wnd;
             play_butt_0.pixels = (uint32*)stbi_load(play_butt_0_fn, &play_butt_0.w, &play_butt_0.h, NULL, 0);
@@ -2043,8 +1932,8 @@ WinMain(HINSTANCE Instance,
 
             file_h = draw_f_zone.h / 12;
             f_href = draw_f_zone.y;
-            // allocate memory buffer representing the UI 
 
+            // allocate memory buffer representing the UI 
             if (bmp_memory)
             {
                 VirtualFree(bmp_memory, 0, MEM_RELEASE);
@@ -2100,7 +1989,7 @@ WinMain(HINSTANCE Instance,
                     else
                         sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
 
-                    // update bitmap position
+                    // grid and region_select dragging
                     if (my_mouse.l_down && !zooming)
                     {
                         if (mov_region)
@@ -2189,7 +2078,7 @@ WinMain(HINSTANCE Instance,
                         }
                     }
 
-                    // handling mouse clicks
+                    // mouse activation of grib cells + menu zone interaction
                     if (!gif_saving)
                     {
                         if (my_mouse.r_down)
@@ -2215,11 +2104,11 @@ WinMain(HINSTANCE Instance,
                                         {
                                             if (i < left_lim)
                                                 left_lim = i;
-                                            if (i > right_lim)
+                                            else if (i > right_lim)
                                                 right_lim = i;
                                             if (j < top_lim)
                                                 top_lim = j;
-                                            if (j > bottom_lim)
+                                            else if (j > bottom_lim)
                                                 bottom_lim = j;
                                         }
                                     }
@@ -2255,11 +2144,11 @@ WinMain(HINSTANCE Instance,
                                     {
                                         if (i < left_lim)
                                             left_lim = i;
-                                        if (i > right_lim)
+                                        else if (i > right_lim)
                                             right_lim = i;
                                         if (j < top_lim)
                                             top_lim = j;
-                                        if (j > bottom_lim)
+                                        else if (j > bottom_lim)
                                             bottom_lim = j;
                                     }
                                     top_lim0 = top_lim;
@@ -2630,7 +2519,7 @@ WinMain(HINSTANCE Instance,
                     }
                     for (int i = 0; i < slctd_nbr; i++)
                     {
-                        recta num_zone = { initial_curs_pos.x + slctd_nums[i] * num_width, initial_curs_pos.y + 2, num_width, num_height };
+                        recta num_zone = { initial_curs_pos.x + slctd_nums[i] * num_width, initial_curs_pos.y, num_width, my_cursor.h};
                         insert_color_to_zone(slct_color, num_zone);
                     }
 
