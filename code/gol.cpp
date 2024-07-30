@@ -225,7 +225,7 @@ point mouse_coords_region;
 std::vector<point> grid_init_stt; 
 point gif_rg0;
 point gif_rg1;
-
+point region_pos0;
 
 struct r_point {
     double x = 0, y = 0;
@@ -895,6 +895,35 @@ void openf_change_dir(int idx_f)
     }
 }
 
+void make_inside(recta& zone, recta& limits)
+{
+    if (zone.x < limits.x)
+        zone.x = limits.x;
+    if (zone.x + zone.w > limits.x + limits.w)
+        zone.x = limits.x + limits.w - zone.w;
+    if (zone.y < limits.y)
+        zone.y = limits.y;
+    if (zone.y + zone.h > limits.y + limits.h)
+        zone.y = limits.y + limits.h - zone.h;
+}
+
+// assures first tat a >= low then that a <= up, could pass through both and order is important
+void make_inside(int& a, int low, int up)
+{
+    if (a < low)
+        a = low;
+    if (a > up)
+        a = up;
+}
+
+void make_inside(int& a, int&& low, int&& up)
+{
+    if (a < low)
+        a = low;
+    if (a > up)
+        a = up;
+}
+
 void update_wnd(HDC device_context, RECT* client_rect)
 {
     //OutputDebugStringA("window update \n");
@@ -1007,23 +1036,23 @@ wnd_callback(HWND wnd,
             else if (show_map && in_zone(mouse_coords_ldown, region_slct_zone))
             {
                 mov_region = true;
-                int last_x = region_pos.x;
-                int last_y = region_pos.y;
+                int last_x = bmp_region_zone.x;
+                int last_y = bmp_region_zone.y;
+                
+                // regulating the size adjusting for ratio problms
+                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
+                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
 
-                region_pos.x = mouse_coords_ldown.x - bmp_region_zone.w / 2;
-                region_pos.y = mouse_coords_ldown.y - bmp_region_zone.h / 2;
-                if (region_pos.x <= region_slct_zone.x)
-                    region_pos.x = region_slct_zone.x + 1;
-                if (region_pos.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                    region_pos.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w - 1;
-                if (region_pos.y <= region_slct_zone.y)
-                    region_pos.y = region_slct_zone.y + 1;
-                if (region_pos.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                    region_pos.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h - 1;
+                bmp_region_zone.x = mouse_coords_ldown.x - bmp_region_zone.w / 2;
+                bmp_region_zone.y = mouse_coords_ldown.y - bmp_region_zone.h / 2;
 
-                bmp_pos.x += (region_pos.x - last_x) * box_w / map_box_w;
-                bmp_pos.y += (region_pos.y - last_y) * box_w / map_box_w;
-
+                make_inside(bmp_region_zone, region_slct_zone);
+                
+                bmp_pos.x += (bmp_region_zone.x - last_x) * box_w / map_box_w;
+                bmp_pos.y += (bmp_region_zone.y - last_y) * box_w / map_box_w;
+                
+                region_pos0.x = bmp_region_zone.x;
+                region_pos0.y = bmp_region_zone.y;
             }
         }
         else if(open_file)
@@ -1038,11 +1067,8 @@ wnd_callback(HWND wnd,
                         f_href += file_h;
                     else
                         f_href += (d0 - d1);
-
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                    
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
@@ -1055,10 +1081,7 @@ wnd_callback(HWND wnd,
                     else
                         f_href -= file_h - (d0 - d1);
 
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
@@ -1210,10 +1233,8 @@ wnd_callback(HWND wnd,
                 {
                     f_href += file_h;
 
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
+
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
@@ -1221,10 +1242,8 @@ wnd_callback(HWND wnd,
                 {
                     f_href -= file_h;
 
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
+
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
@@ -1256,10 +1275,8 @@ wnd_callback(HWND wnd,
                 int dir = delta > 0 ? 1 : -1;
                 f_href += dir * 2 * file_h;
 
-                if (f_href > draw_f_zone.y)
-                    f_href = draw_f_zone.y;
-                if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                    f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
+
                 scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
             }
         }
@@ -1422,10 +1439,7 @@ wnd_callback(HWND wnd,
                     else if (f_href + (fslctd_idx+1) * file_h > draw_f_zone.y + draw_f_zone.h)
                         f_href = draw_f_zone.y +draw_f_zone.h - (fslctd_idx +1)* file_h;
 
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
 
                 }break;
@@ -1438,10 +1452,7 @@ wnd_callback(HWND wnd,
                     else if (f_href + (fslctd_idx + 1) * file_h > draw_f_zone.y + draw_f_zone.h)
                         f_href = draw_f_zone.y + draw_f_zone.h - (fslctd_idx + 1) * file_h;
                     
-                    if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                        f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
-                    if (f_href > draw_f_zone.y)
-                        f_href = draw_f_zone.y;
+                    make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
 
                 }break;
@@ -1996,8 +2007,45 @@ WinMain(HINSTANCE Instance,
                         {
                             if (in_zone(mouse_coords, region_slct_zone))
                             {
-                                bmp_pos.x += (mouse_coords.x - prev_mouse_coords.x) * box_w / map_box_w;
-                                bmp_pos.y += (mouse_coords.y - prev_mouse_coords.y) * box_w / map_box_w;
+                                // regulating the size adjusting for ratio problms
+                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
+                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
+
+                                // update region position
+                                bmp_region_zone.x = region_pos0.x + mouse_coords.x - mouse_coords_ldown.x;
+                                bmp_region_zone.y = region_pos0.y + mouse_coords.y - mouse_coords_ldown.y;
+                                
+                                // assert limits and change map_pos accordingly
+                                if (bmp_region_zone.x <= region_slct_zone.x)
+                                {
+                                    if (map_pos.x > 0)
+                                        map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
+                                    bmp_region_zone.x = region_slct_zone.x;
+                                }
+                                if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
+                                {
+                                    if (map_pos.x + map_w < nb_box_w * map_box_w)
+                                        map_pos.x = min(nb_box_w * map_box_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                                    bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
+                                }
+                                if (bmp_region_zone.y <= region_slct_zone.y)
+                                {
+                                    if (map_pos.y > 0)
+                                        map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
+                                    bmp_region_zone.y = region_slct_zone.y;
+                                }
+                                if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
+                                {
+                                    if (map_pos.y + map_h < nb_box_h * map_box_w)
+                                    {
+                                        map_pos.y = min(nb_box_h * map_box_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                                    }
+                                    bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
+                                }
+
+                                // update bitmap_pos and assert limits
+                                bmp_pos.x = (bmp_region_zone.x + map_pos.x - region_slct_zone.x) * box_w / map_box_w;
+                                bmp_pos.y = (bmp_region_zone.y + map_pos.y - region_slct_zone.y) * box_w / map_box_w;
 
                                 if (bmp_pos.x < 0)
                                     bmp_pos.x = 0;
@@ -2007,66 +2055,13 @@ WinMain(HINSTANCE Instance,
                                     bmp_pos.y = 0;
                                 if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
                                     bmp_pos.y = nb_box_h * box_h - bmp_h1;
-
-                                region_pos.x = bmp_pos.x * map_box_w / box_w - map_pos.x + region_slct_zone.x;
-                                region_pos.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
-
-                                if (region_pos.x <= region_slct_zone.x)
-                                {
-                                    map_pos.x -= region_slct_zone.x - int(region_pos.x);
-                                    region_pos.x = region_slct_zone.x;
-                                }
-                                if (region_pos.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                                {
-                                    map_pos.x += int(region_pos.x) + bmp_region_zone.w - region_slct_zone.x - region_slct_zone.w;
-                                    region_pos.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
-                                }
-                                if (region_pos.y <= region_slct_zone.y)
-                                {
-                                    map_pos.y -= region_slct_zone.y - int(region_pos.y);
-                                    region_pos.y = region_slct_zone.y;
-                                }
-                                if (region_pos.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                                {
-                                    map_pos.y += int(region_pos.y) + bmp_region_zone.h - region_slct_zone.y - region_slct_zone.h;
-                                    region_pos.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
-                                }
-
-                                if (region_pos.x == region_slct_zone.x)
-                                    bmp_pos.x -= 2 * box_w / map_box_w;
-                                if (region_pos.x == region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w)
-                                    bmp_pos.x += 2 * box_w / map_box_w;
-                                if (region_pos.y == region_slct_zone.y)
-                                    bmp_pos.y -= 2 * box_w / map_box_w;
-                                if (region_pos.y == region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h)
-                                    bmp_pos.y += 2 * box_w / map_box_w;
-
-                                if (bmp_pos.x < 0)
-                                    bmp_pos.x = 0;
-                                if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
-                                    bmp_pos.x = nb_box_w * box_w - bmp_w1;
-                                if (bmp_pos.y < 0)
-                                    bmp_pos.y = 0;
-                                if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
-                                    bmp_pos.y = nb_box_h * box_h - bmp_h1;
-
-                                if (map_pos.x < 0)
-                                    map_pos.x = 0;
-                                if (map_pos.x >= nb_box_w * map_box_w - map_w)
-                                    map_pos.x = nb_box_w * map_box_w - map_w;
-                                if (map_pos.y < 0)
-                                    map_pos.y = 0;
-                                if (map_pos.y >= nb_box_h * map_box_w + map_h)
-                                    map_pos.y = nb_box_h * map_box_w - map_h;
-
-                                bmp_region_zone.x = int(region_pos.x);
-                                bmp_region_zone.y = int(region_pos.y);
                             }
                         }
                         else if (!in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
                         {
                             bmp_pos.x -= (mouse_coords.x - prev_mouse_coords.x) / zoom_ratio_x;
                             bmp_pos.y -= (mouse_coords.y - prev_mouse_coords.y) / zoom_ratio_y;
+
                             if (bmp_pos.x < 0)
                                 bmp_pos.x = 0;
                             if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
@@ -2257,6 +2252,57 @@ WinMain(HINSTANCE Instance,
 
                         }
 
+                        // handling simulation velocity setting
+                        if (int_bar_slctd)
+                        {
+                            intens_slct.pos.x = mouse_coords.x - intens_slct.w / 2;
+                            if (mouse_coords.x >= intens_bar.pos.x + intens_bar.w)
+                                intens_slct.pos.x = intens_bar.pos.x + intens_bar.w - intens_slct.w / 2;
+                            if (mouse_coords.x <= intens_bar.pos.x)
+                                intens_slct.pos.x = intens_bar.pos.x - intens_slct.w / 2;
+                        }
+                        sim_freq = double(5 * (intens_slct.pos.x + intens_slct.w / 2 - intens_bar.pos.x)) / intens_bar.w + 1;
+                        step_dur = 1.0 / sim_freq;
+
+                        // change region_pos after zoom and dragging handled
+                        if (!mov_region)
+                        {
+                            bmp_region_zone.x = bmp_pos.x * map_box_w / box_w - map_pos.x + region_slct_zone.x;
+                            bmp_region_zone.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
+                            if (bmp_region_zone.x <= region_slct_zone.x)
+                            {
+                                if (map_pos.x > 0)
+                                    map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
+                                bmp_region_zone.x = region_slct_zone.x;
+                            }
+                            if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
+                            {
+                                if (map_pos.x + map_w < nb_box_w * map_box_w)
+                                    map_pos.x = min(nb_box_w * map_box_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                                bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
+                            }
+                            if (bmp_region_zone.y <= region_slct_zone.y)
+                            {
+                                if (map_pos.y > 0)
+                                    map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
+                                bmp_region_zone.y = region_slct_zone.y;
+                            }
+                            if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
+                            {
+                                if (map_pos.y + map_h < nb_box_h * map_box_w)
+                                    map_pos.y = min(nb_box_h * map_box_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                                bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
+                            }
+                            if(bmp_pos.x == nb_box_w * box_w - bmp_w1 && int(bmp_w1)%box_w != 0)
+                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w + 1;
+                            else 
+                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
+                            if (bmp_pos.y == nb_box_h * box_h - bmp_h1 && int(bmp_h1) % box_h != 0)
+                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h + 1;
+                            else
+                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
+                        }
+
                         // grid inserting 
                         insert_bgnd_color(black);
                         int i = 1;
@@ -2297,36 +2343,6 @@ WinMain(HINSTANCE Instance,
                             }
                         }
 
-                        // handling simulation velocity setting
-                        if (int_bar_slctd)
-                        {
-                            intens_slct.pos.x = mouse_coords.x - intens_slct.w / 2;
-                            if (mouse_coords.x >= intens_bar.pos.x + intens_bar.w)
-                                intens_slct.pos.x = intens_bar.pos.x + intens_bar.w - intens_slct.w / 2;
-                            if (mouse_coords.x <= intens_bar.pos.x)
-                                intens_slct.pos.x = intens_bar.pos.x - intens_slct.w / 2;
-                        }
-                        sim_freq = double(5 * (intens_slct.pos.x + intens_slct.w / 2 - intens_bar.pos.x)) / intens_bar.w + 1;
-                        step_dur = 1.0 / sim_freq;
-
-                        if (!mov_region)
-                        {
-                            bmp_region_zone.x = bmp_pos.x * map_box_w / box_w - map_pos.x + region_slct_zone.x;
-                            bmp_region_zone.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
-                            if (bmp_region_zone.x <= region_slct_zone.x)
-                                bmp_region_zone.x = region_slct_zone.x;
-                            if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                                bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
-                            if (bmp_region_zone.y <= region_slct_zone.y)
-                                bmp_region_zone.y = region_slct_zone.y;
-                            if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                                bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
-                            region_pos.x = bmp_region_zone.x;
-                            region_pos.y = bmp_region_zone.y;
-
-                        }
-                        bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
-                        bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
                     }
 
                     if (gif_saving)
