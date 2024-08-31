@@ -18,7 +18,6 @@
 
 #include "stb_image.h"
 
-
 typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
@@ -28,237 +27,45 @@ typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
-HWND main_wnd;
-HWND h_dlg;
-HWND h_v_edit;
-HWND h_ng_edit;
-LARGE_INTEGER PerformanceFrequencyL;
-double loop_time;
 
-char play_butt_0_fn[]  = "..\\images\\play_butt_0.png";
-char play_butt_1_fn[]  = "..\\images\\play_butt_1.png";
-char play_butt_2_fn[] = "..\\images\\play_butt_2.png";
-
-char pause_butt_0_fn[] = "..\\images\\pause_butt_0.png";
-char pause_butt_1_fn[] = "..\\images\\pause_butt_1.png";
-char pause_butt_2_fn[] = "..\\images\\pause_butt_2.png";
-
-char reinit_butt_fn[]   = "..\\images\\reinit_butt.png";
-char reinit_butt_1_fn[] = "..\\images\\reinit_butt_1.png";
-char reinit_butt_2_fn[] = "..\\images\\reinit_butt_2.png";
-
-char next_butt_fn[]     = "..\\images\\next_butt.png";
-char next_butt_1_fn[] = "..\\images\\next_butt_1.png";
-char next_butt_2_fn[] = "..\\images\\next_butt_2.png";
-
-char intens_bar_fn[]  = "..\\images\\intensity_bar.png";
-char intens_slct_fn[] = "..\\images\\intensity_select.png";
-char cursor_fn[]      = "..\\images\\cursor.png";
-char go_butt_fn[]     = "..\\images\\go_butt.png";
-char go_butt_1_fn[]   = "..\\images\\go_butt_1.png";
-char go_butt_2_fn[]   = "..\\images\\go_butt_2.png";
-char step_setter_fn[] = "..\\images\\step_setter.png";
-char num_letters_fn[] = "..\\images\\num_letters.png";
-char hide_fn[] = "..\\images\\hide.png";
-char anti_hide_fn[] = "..\\images\\anti_hide.png";
-char save_butt_fn[] = "..\\images\\save_butt.png";
-char scrl_up_fn[] = "..\\images\\scrl_up.png";
-char scrl_down_fn[] = "..\\images\\scrl_down.png";
-char scrl_up1_fn[] = "..\\images\\scrl_up1.png";
-char scrl_down1_fn[] = "..\\images\\scrl_down1.png";
-char folder_icon_fn[] = "..\\images\\folder.png";
-
-
-wchar_t *saving_fn;
-wchar_t *opening_fn; 
-
-
-bool running = false;
-
-// Bitmap Info
-void* bmp_memory = NULL;
-
-int bmp_w;
-int bmp_h;
-double bmp_w1;
-double bmp_h1;
-int bmp_w1_targ;
-int bmp_h1_targ;
-double zoom_ratio_x;
-double zoom_ratio_y;
-bool zoom_in = false;
-double zoom_speed;
-double pos_zpeed_x;
-double pos_zpeed_y;
-bool zooming = false;
-
-BITMAPINFO bmp_info;
-int bytes_per_pixel = 4;
+typedef POINT point;
+bool operator==(point a, point b)
+{
+    return ((a.x == b.x) && (a.y == b.y));
+}
 
 //Colors
-uint32 white  = 0xffffffff;
-uint32 light  = 0x00f8f8a9;
-uint32 black  = 0x00000000;
+uint32 white = 0xffffffff;
+uint32 light = 0x00f8f8a9;
+uint32 black = 0x00000000;
 uint32 orange = 0x00f39f80;
 uint32 l_orange = 0x00ffaa80;
 uint32 d_orange = 0x00ef7c51;
-uint32 red    = 0x00ff0000;
-uint32 green  = 0x0000ff00;
-uint32 blue   = 0x000000ff;
-uint32 grey   = 0x004a4a4a;
+uint32 red = 0x00ff0000;
+uint32 green = 0x0000ff00;
+uint32 blue = 0x000000ff;
+uint32 grey = 0x004a4a4a;
 uint32 l_grey = 0x007e7e7e;
 uint32 ll_grey = 0x00ef0f0f0;
 uint32 l_blue = 0x008cfffb;
 uint32 ld_blue = 0x007fe2de;
 uint32 lg_blue = 0x00e7fffe;
 uint32 ldg_blue = 0x00b4fffd;
-
-
 uint32 slct_color = 0x005ac3f2;
 
-// Grid info
-int box_w    = 40;
-int box_h    = 40;
-int line_w   = 6;
-int nb_box_w = 400;
-int nb_box_h = 400;
-int nb_boxes = nb_box_w * nb_box_h;
-
-// num_letters sprite info
-int num_width  = 16;
-int num_height = 14;
-int letter_w   = 16;
-int letter_h   = 14;
-
-LARGE_INTEGER begin_time, end_time, before_blit_time;
-
-bool frame_calc_start = false;
-
-// simulation params 
-bool is_step_time = false;
-double sim_timer  = 0;
-bool sim_on       = false;
-double sim_freq   = 1;
-double step_dur   = 0.5;
-int actual_step   = 0;
-int target_step   = -1;
-int prv_targ_stp  = -1;
-int top_lim = nb_box_h;
-int left_lim = nb_box_w;
-int right_lim = 0;
-int bottom_lim = 0;
-int top_lim0;
-int left_lim0;
-int right_lim0;
-int bottom_lim0;
-
-// frame rate params 
-double frame_dur = 0.017; // 60fps
-// cursor 
-double cursor_timer = 0;
-
-
-// input 
-bool go_butt_clkd = false;
-bool go_butt_down = false;
-bool plpau_down = false;
-bool reinit_down = false;
-bool next_down = false;
-bool show_map = false;
-bool sh_hide_clkd = false;
-bool save_clkd = false;
-bool open_clkd = false;
-bool gif_saving = false;
-bool gif_rg_slctd = false;
-bool gif_slct_mode = false;
-bool gif_params_entrd = false;
-int nb_gen = 1;
-int gen_ps = 1;
-bool dlg_crtd = false;
-std::wstring gif_path;
-
-bool int_bar_slctd = false;
-bool show_cursor = false;
-std::vector<char> step_str(5);
-int num_crctrs = 0;
-bool slct_mode = false;
-int slctd_nums[5];
-int initial_slct_x = -1;
-int slctd_nbr = 0;
-
-//region selection params
-bool mov_region = false;
-
-// interaction modes, if one is true others are false
-bool open_file = false;
-bool save_file = false;
-bool open_f_dlg = false;
-bool f_error_dlg = false;
-bool normal_mode = true;
-
-bool files_extrctd = false;
-int nb_files;
-std::deque<std::pair<std::string, bool>>  files_q;
-std::string curr_dir;
-int file_h;
-int fslctd_idx = -1;
-double scrl_timer;
-bool in_root = false;
-double scrl_ratio = 3;
-bool scrler_draging = false;
-int scrler_y0;
-bool scrler_attrctng = false;
-int scrl_dir;
-int f_href;
-bool scrl_exist = false;
-
-struct point {
-    int x = -1, y = -1;
-    bool operator==(point b)
-    {
-        if (b.x == x && b.y == y)
-            return true;
-        return false;
-    }
-};
-point mouse_coords_region;
-std::vector<point> grid_init_stt; 
-point gif_rg0;
-point gif_rg1;
-point region_pos0;
-
+// structs ----------------------------------
 struct r_point {
     double x = 0, y = 0;
 };
 
-r_point bmp_pos;
-r_point bmp_pos_targ;
-
-int map_box_w = 1;
-int map_w = 300;
-int map_h = 300;
-r_point region_pos ;
-r_point map_pos;
-
-struct box
+struct r_recta
 {
-    bool stt = false, l_stt = false, updated = false;
+    double x, y, w, h;
+    r_recta operator*(int k)
+    {
+        return r_recta{ k * x, k * y, k * w, k * h };
+    }
 };
-box* grid = new box[nb_boxes];
-
-//Mouse
-struct mouse
-{
-	bool l_down = false, r_down = false, l_clk = false;
-};
-mouse my_mouse;
-mouse initial_mouse;
-POINT mouse_coords;
-POINT prev_mouse_coords;
-POINT mouse_coords_ldown;
-POINT mouse_coords_rdown;
-POINT mouse_coords_rup;
-POINT mouse_coords_lup;
 
 struct recta
 {
@@ -267,85 +74,303 @@ struct recta
     {
         return recta{ k * x, k * y, k * w, k * h };
     }
+    recta operator=(r_recta& rr)
+    {
+        x = int(rr.x);
+        y = int(rr.y);
+        w = int(rr.w);
+        h = int(rr.h);
+        return *this;
+    }
 };
 
-recta play_butt_zone;
-recta reinit_butt_zone;
-recta menu_zone ;
-recta step_slct_zone ;
-recta go_butt_zone;
-point initial_curs_pos;
-recta mul_sign_zone = { 160, 32, 10, 10 };
-recta dot_zone = { num_width * 10 , 0, 4, 2 };
-recta actual_step_zone;
-recta sim_vel_zone; 
-recta go_to_stp_zone;
-recta region_slct_zone;
-recta bmp_region_zone;
-recta save_butt_zone;
-recta open_butt_zone;
-recta clear_butt_zone;
-recta open_f_zone;
-recta draw_f_zone;
-recta scrl_zone;
-recta scrler_zone;
-recta openf_butt_zone;
-recta cancel_butt_zone;
-recta scrl_up_zone;
-recta scrl_down_zone;
-recta draw_f_zone_wscrl;
-recta draw_f_zone_scrl;
+
+struct cell
+{
+    bool stt = false, l_stt = false, updated = false;
+};
+
+struct mouse
+{
+    bool l_down = false, r_down = false, l_clk = false;
+};
 
 struct image
 {
     uint32* pixels = NULL;
     int w = 0, h = 0;
-    point pos;
+    recta scr_zone;
 };
 
-image play_butt_0;
-image play_butt_1;
-image play_butt_2;
+bool running = false;
 
-image pause_butt_0;
-image pause_butt_1;
-image pause_butt_2;
+// files ----------------------------------
+char* play_butt_fn[3]   = { "..\\images\\play_butt_0.png", 
+                            "..\\images\\play_butt_1.png",
+                            "..\\images\\play_butt_2.png" };
+char* pause_butt_fn[3]  = { "..\\images\\pause_butt_0.png",
+                            "..\\images\\pause_butt_1.png",
+                            "..\\images\\pause_butt_2.png" };
+char* reinit_butt_fn[3] = { "..\\images\\reinit_butt.png",
+                            "..\\images\\reinit_butt_1.png",
+                            "..\\images\\reinit_butt_2.png" };
+char* next_butt_fn[3]   = { "..\\images\\next_butt.png",
+                            "..\\images\\next_butt_1.png",
+                            "..\\images\\next_butt_2.png" };
+char* go_butt_fn[3]     = { "..\\images\\go_butt.png",
+                            "..\\images\\go_butt_1.png",
+                            "..\\images\\go_butt_2.png" };
+char* scrl_up_fn[2]     = { "..\\images\\scrl_up.png",
+                            "..\\images\\scrl_up1.png" };
+char* scrl_down_fn[2]   = { "..\\images\\scrl_down.png",
+                            "..\\images\\scrl_down1.png" };
 
-image reinit_butt;
-image reinit_butt_1;
-image reinit_butt_2;
+char intens_bar_fn[]  = "..\\images\\intensity_bar.png";
+char intens_slct_fn[] = "..\\images\\intensity_select.png";
+char cursor_fn[]      = "..\\images\\cursor.png";
+char num_letters_fn[] = "..\\images\\num_letters.png";
+char hide_fn[]        = "..\\images\\hide.png";
+char anti_hide_fn[]   = "..\\images\\anti_hide.png";
+char folder_icon_fn[] = "..\\images\\folder.png";
 
-image next_butt;
-image next_butt_1;
-image next_butt_2;
+// windows handles ----------------------------------
+HWND main_wnd;
+HWND h_dlg;
+HWND h_v_edit;
+HWND h_ng_edit;
 
-image go_butt;
-image go_butt_1;
-image go_butt_2;
+// time calculation vars ----------------------------------
+LARGE_INTEGER PerformanceFrequencyL;
+double loop_time;
+LARGE_INTEGER begin_time, end_time, before_blit_time;
 
+// Bitmap params ----------------------------------
+void* bmp_memory = NULL;
+BITMAPINFO bmp_info;
+int bytes_per_pixel = 4;
+r_recta bmp_zone;
+recta screen_zone;
+recta vbmp_zone;
+// zooming params ----------------------------------
+recta bmp_zone_targ;
+double zoom_ratio_x;
+double zoom_ratio_y;
+bool zoom_in = false;
+double zoom_speed;
+double pos_zpeed_x;
+double pos_zpeed_y;
+bool zooming = false;
+
+// Grid params ----------------------------------
+int cell_w    = 40;
+int cell_h    = 40;
+int line_w   = 6;
+int nb_cell_w = 400;
+int nb_cell_h = 400;
+int nb_cells = nb_cell_w * nb_cell_h;
+cell* grid = new cell[nb_cells];
+
+// simulation params ----------------------------------
+bool is_step_time = false;
+double sim_timer  = 0;
+bool sim_on       = false;
+double sim_freq   = 1;
+double step_dur   = 0.5;
+int actual_step   = 0;
+int target_step   = -1;
+int prv_targ_stp  = -1;
+int top_lim = nb_cell_h;
+int left_lim = nb_cell_w;
+int right_lim = 0;
+int bottom_lim = 0;
+int top_lim0;
+int left_lim0;
+int right_lim0;
+int bottom_lim0;
+std::vector<point> grid_init_stt;
+
+// frame rate params ----------------------------------
+double frame_dur = 0.017; // 60fps
+bool frame_calc_start = false;
+
+// menu zone params ----------------------------------
+bool go_butt_clkd = false;
+bool go_butt_down = false;
+bool plpau_down = false;
+bool reinit_down = false;
+bool next_down = false;
+bool show_map = false;
+bool int_bar_slctd = false;
+bool show_cursor = false;
+
+//  _step selection params ----------------------------------
+std::string step_str;
+bool slct_mode = false;
+int initial_slct_idx = 0;
+int mouse_slct_idx = 0;
+int initial_curs_x;
+int max_crctrs = 5;
+double cursor_timer = 0;
+
+// gif saving params ----------------------------------
+bool gif_rg_slctd = false;
+bool gif_slct_mode = false;
+bool gif_params_entrd = false;
+int nb_gen = 1;
+int gen_ps = 1;
+bool dlg_crtd = false;
+std::wstring gif_path;
+point gif_rg0;
+point gif_rg1;
+
+// region selection params ----------------------------------
+bool mov_region = false;
+point region_pos0;
+int map_cell_w = 1;
+int map_w = 300;
+int map_h = 300;
+r_point map_pos;
+recta region_slct_zone;
+recta bmp_region_zone;
+
+// interaction modes, may intersect ----------------------------------
+bool open_file = false;
+bool save_file = false;
+bool gif_saving = false;
+bool open_f_dlg = false;
+bool f_error_dlg = false;
+bool normal_mode = true;
+
+// file opeining params ----------------------------------
+int nb_files;
+int file_h;
+std::deque<std::pair<std::string, bool>>  files_q;
+std::string curr_dir;
+bool in_root = false;
+int fslctd_idx = -1;
+// scroller
+double scrl_timer;
+double scrl_ratio = 3;
+bool scrler_draging = false;
+int scrler_y0;
+bool scrler_attrctng = false;
+int scrl_dir;
+int f_href;
+bool scrl_exist = false;
+recta scrl_zone;
+recta scrler_zone;
+recta scrl_up_zone;
+recta scrl_down_zone;
+// other parts zones 
+recta open_f_zone;
+recta draw_f_zone;
+recta openf_butt_zone;
+recta cancel_butt_zone;
+recta draw_f_zone_wscrl;
+recta draw_f_zone_scrl;
+
+// user input params ----------------------------------
+mouse my_mouse;
+mouse initial_mouse;
+point mouse_coords;
+point prev_mouse_coords;
+point mouse_coords_ldown;
+point mouse_coords_rdown;
+point mouse_coords_rup;
+point mouse_coords_lup;
+
+// menu zone and subzones ----------------------------------
+recta menu_zone;
+recta step_slct_zone;
+recta actual_step_zone;
+recta sim_vel_zone; 
+recta go_to_stp_zone;
+recta save_butt_zone;
+recta open_butt_zone;
+recta clear_butt_zone;
+// UI images ----------------------------------
+image play_butt[3];
+image pause_butt[3];
+image reinit_butt[3];
+image next_butt[3];
+image go_butt[3];
+image scrl_up[2];
+image scrl_down[2];
 image intens_slct;
 image intens_bar;
 image my_cursor;
-image step_setter;
 image num_letters;
 image hide;
 image anti_hide;
-image save_butt;
-image scrl_up;
-image scrl_down;
-image scrl_up1;
-image scrl_down1;
 image folder_icon;
 
+// num_letters sprite info ----------------------------------
+int num_width;
+int num_height;
+int src_num_width = 16;
+int src_num_height = 14;
+
+int letter_w = 16;
+int letter_h = 14;
+recta mul_sign_zone = { 160, 32, 10, 10 };
+recta dot_zone = { src_num_width * 10 , 0, 4, 2 };
+
+// function prototypes ----------------------------------
+// basic blitting  
+void insert_color_to_zone(uint32 color, recta zone, recta limits);
+void insert_recta(recta my_rect, uint32 color, int bordr_w);
+void insert_out_recta(recta my_rect, uint32 color, int bordr_w);
+void insert_im(image im, bool to_blit);
+void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_color, uint32 color, recta limits);
+void insert_from_im(image src_im, recta src_zone, point pos);
+void insert_num(char num, recta dest_zone);
+void insert_text(const char* my_text, point pos, point char_size, bool to_color , uint32 color, recta limits);
+void insert_text_to_zone(const char* my_text, recta dest_zone, bool to_color, uint32 color);
+void insert_bgnd_color(uint32 color);
+
+// map and some menu zone images and buttons insertion
+void insert_sim_vel();
+void insert_actual_step();
+void insert_region_slct();
+void insert_save_butt();
+void insert_open_butt();
+void insert_clear_butt();
+
+// simulation 
+bool is_neigh_alive(int neigh_x, int neigh_y);
+void one_step_ahead(); 
+
+// grid updating 
+void reinit_grid();
+void clear_grid();
+
+// opening file  
+void openf_change_dir(int idx_f);
+void get_curr_dir(std::string& curr_dir);
+
+// gif_saving
 void save_as_gif();
-bool zone_intersect(recta zone_1, recta zone_2);
+void save_config(HWND wnd);
+
+// other 
+void insert_dlg_box(std::string str, std::string title, recta zone, uint32 color, uint32 hl_color);
+int get_step_int();
+point get_clk_cell(POINT m_coords);
+bool in_zone(point& m_coords, recta&& zone);
+bool in_zone(point& m_coords, recta& zone);
+void make_inside(int& a, const int& low, const int& up);
+void make_inside(double& a, const int& low, const int& up);
+void make_inside(recta& zone, const recta& limits);
+void make_inside(r_recta& zone, const recta& limits);
+
+std::wstring f_ext(const std::wstring& file_path);
 
 void insert_bgnd_color(uint32 color)
 {
     uint32* pixel = (uint32*)bmp_memory;
-    for (int y = 0; y < bmp_h; y++)
-        for (int x = 0; x < bmp_w; x++)
-            pixel[y * bmp_w + x] = color;
+    for (int y = 0; y < screen_zone.h; y++)
+        for (int x = 0; x < screen_zone.w; x++)
+            pixel[y * screen_zone.w + x] = color;
 
 }
 
@@ -355,12 +380,12 @@ void insert_color_to_zone(uint32 color, recta zone, recta limits = {-1,-1,INT_MA
     
     int y = max(0, max(zone.y, limits.y));
     int x0 = max(0, max(zone.x, limits.x));
-    int y_max = min(bmp_h, min(zone.y + zone.h, limits.y + limits.h));
-    int x_max = min(bmp_w, min(zone.x + zone.w, limits.x + limits.w));
+    int y_max = min(screen_zone.h, min(zone.y + zone.h, limits.y + limits.h));
+    int x_max = min(screen_zone.w, min(zone.x + zone.w, limits.x + limits.w));
 
     for(; y < y_max; y++)
         for (int x = x0; x < x_max; x++)
-            pixel[y * bmp_w + x] = color;
+            pixel[y * screen_zone.w + x] = color;
 }
 
 void insert_recta(recta my_rect, uint32 color, int bordr_w)
@@ -384,22 +409,22 @@ void insert_im(image im, bool to_blit = false)
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask= 0xff000000;
 
-    int x0 = max(0, im.pos.x);
-    int y = max(0, im.pos.y);
-    int x_max = min(bmp_w, im.pos.x + im.w);
-    int y_max  = min(bmp_h, im.pos.y + im.h);
+    int x0 = max(0, im.scr_zone.x);
+    int y = max(0, im.scr_zone.y);
+    int x_max = min(screen_zone.w, im.scr_zone.x + im.w);
+    int y_max  = min(screen_zone.h, im.scr_zone.y + im.h);
     
     for (; y < y_max; y++)
     {
         for (int x = x0 ; x < x_max; x++)
         {
-            uint32 p = im.pixels[(y - im.pos.y) * im.w + x - im.pos.x];
+            uint32 p = im.pixels[(y - im.scr_zone.y) * im.w + x - im.scr_zone.x];
             if (p & tr_mask)
             {
                 uint32 Red =   p & 0x000000ff;
                 uint32 Green = p & 0x0000ff00;
                 uint32 Blue =  p & 0x00ff0000;
-                pixel[y * bmp_w + x] = (Red << 16) | Green | (Blue >> 16);
+                pixel[y * screen_zone.w + x] = (Red << 16) | Green | (Blue >> 16);
             } 
         }
     }
@@ -412,16 +437,16 @@ void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_colo
     
     int y = max(0, max(dest_zone.y, limits.y));
     int x0 = max(0, max(dest_zone.x, limits.x));
-    int y_max = min(bmp_h, min(dest_zone.y + dest_zone.h, limits.y + limits.h));
-    int x_max = min(bmp_w, min(dest_zone.x + dest_zone.w, limits.x + limits.w));
-    double strch_y = double(dest_zone.h - 1) / (src_zone.h - 1);
-    double strch_x = double(dest_zone.w - 1) / (src_zone.w - 1);
+    int y_max = min(screen_zone.h, min(dest_zone.y + dest_zone.h, limits.y + limits.h));
+    int x_max = min(screen_zone.w, min(dest_zone.x + dest_zone.w, limits.x + limits.w));
+    double strch_y = double(src_zone.h - 1) / (dest_zone.h - 1);
+    double strch_x = double(src_zone.w - 1) / (dest_zone.w - 1);
     for ( ; y < y_max ; y++)
     {
         for (int x = x0; x < x_max; x++)
         {
-            int src_y = (y - dest_zone.y)/ strch_y + src_zone.y;
-            int src_x = (x - dest_zone.x)/ strch_x + src_zone.x;
+            int src_y = (y - dest_zone.y) * strch_y + src_zone.y;
+            int src_x = (x - dest_zone.x) * strch_x + src_zone.x;
 
             uint32 p = src_im.pixels[src_y * src_im.w + src_x];
             if (p & tr_mask)
@@ -431,10 +456,10 @@ void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_colo
                     uint32 Red = p & 0x000000ff;
                     uint32 Green = p & 0x0000ff00;
                     uint32 Blue = p & 0x00ff0000;
-                    pixel[y * bmp_w + x] = (Red << 16) | Green | (Blue >> 16);
+                    pixel[y * screen_zone.w + x] = (Red << 16) | Green | (Blue >> 16);
                 }
                 else
-                    pixel[y * bmp_w + x] = color;
+                    pixel[y * screen_zone.w + x] = color;
 
             }
         }
@@ -448,8 +473,8 @@ void insert_from_im(image src_im, recta src_zone, point pos)
 
     int x0 = max(0, pos.x);
     int y = max(0, pos.y);
-    int x_max = min(bmp_w, pos.x + src_zone.w);
-    int y_max = min(bmp_h, pos.y + src_zone.h);
+    int x_max = min(screen_zone.w, pos.x + src_zone.w);
+    int y_max = min(screen_zone.h, pos.y + src_zone.h);
 
     for (; y < y_max; y++)
     {
@@ -464,7 +489,7 @@ void insert_from_im(image src_im, recta src_zone, point pos)
                 uint32 Red = p & 0x000000ff;
                 uint32 Green = p & 0x0000ff00;
                 uint32 Blue = p & 0x00ff0000;
-                pixel[y * bmp_w + x] = (Red << 16) | Green | (Blue >> 16);
+                pixel[y * screen_zone.w + x] = (Red << 16) | Green | (Blue >> 16);
             }
         }
     }
@@ -473,11 +498,20 @@ void insert_from_im(image src_im, recta src_zone, point pos)
 void insert_num(char num, recta dest_zone)
 {
     int num_idx = num - '0';
-    recta num_zone = { num_idx * num_width, 0, num_width, num_height };
+    recta num_zone = { num_idx * src_num_width, 0, src_num_width, src_num_height };
     instrch_from_im(num_letters, num_zone, dest_zone);
 }
 
-bool in_zone(POINT m_coords, recta zone)
+bool in_zone(point& m_coords, recta&& zone)
+{
+    int x = m_coords.x;
+    int y = m_coords.y;
+    if (x >= zone.x && x <= zone.x + zone.w && y >= zone.y && y <= zone.y + zone.h)
+        return true;
+    return false;
+}
+
+bool in_zone(point& m_coords, recta& zone)
 {
     int x = m_coords.x;
     int y = m_coords.y;
@@ -536,13 +570,13 @@ void insert_text_to_zone(const char* my_text, recta dest_zone,bool to_color = fa
 }
 void insert_sim_vel()
 {
-    point mul_sign_pos = { intens_slct.pos.x + intens_slct.w + 1, intens_slct.pos.y + intens_slct.h - mul_sign_zone.h };
+    point mul_sign_pos = { intens_slct.scr_zone.x + intens_slct.scr_zone.w + 1, intens_slct.scr_zone.y + intens_slct.scr_zone.h - mul_sign_zone.h };
     instrch_from_im(num_letters, mul_sign_zone, { mul_sign_pos.x, mul_sign_pos.y, 9, 9 });
 
-    recta vel_zone = { mul_sign_pos.x + mul_sign_zone.w + 1, mul_sign_pos.y - (num_height - mul_sign_zone.h), 36, 14 };
+    recta vel_zone = { mul_sign_pos.x + mul_sign_zone.w + 1, mul_sign_pos.y + mul_sign_zone.h - 14, 36, 14 };
     int crc_w = vel_zone.w / 3;
     insert_num(char(int(sim_freq) + '0'), { vel_zone.x, vel_zone.y, crc_w, vel_zone.h });
-    insert_from_im(num_letters, dot_zone, { vel_zone.x + crc_w , vel_zone.y + num_height - dot_zone.h });
+    insert_from_im(num_letters, dot_zone, { vel_zone.x + crc_w , vel_zone.y + vel_zone.h - dot_zone.h });
     insert_num(int(sim_freq * 10) % 10 + '0', { vel_zone.x + crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
 }
 
@@ -571,21 +605,20 @@ void insert_actual_step()
     }
     insert_out_recta({ dig_init_pos_x - 2, actual_step_zone.y + actual_step_zone.h + 18, nb_digits * num_width + 4, num_height + 4 }, orange, 5);
 }
-
 bool is_neigh_alive(int neigh_x, int neigh_y)
 {
-    if (grid[neigh_y * nb_box_w + neigh_x].updated)
-        return  grid[neigh_y * nb_box_w + neigh_x].l_stt;
+    if (grid[neigh_y * nb_cell_w + neigh_x].updated)
+        return  grid[neigh_y * nb_cell_w + neigh_x].l_stt;
 
-    return grid[neigh_y * nb_box_w + neigh_x].stt;
+    return grid[neigh_y * nb_cell_w + neigh_x].stt;
 }
 
 void one_step_ahead()
 {   
     int j0 = max(1, top_lim - 1);
     int i0 = max(1, left_lim - 1);
-    int j_max = min(bottom_lim + 1, nb_box_h - 2);
-    int i_max = min(right_lim + 1, nb_box_w - 2);
+    int j_max = min(bottom_lim + 1, nb_cell_h - 2);
+    int i_max = min(right_lim + 1, nb_cell_w - 2);
     for (int j = j0; j <= j_max; j++)
     {
         for (int i = i0; i <= i_max; i++)
@@ -615,17 +648,17 @@ void one_step_ahead()
             neigh_x = i + 1; neigh_y = j + 1;
             neigh_alive += int(is_neigh_alive(neigh_x, neigh_y));
 
-            grid[j * nb_box_w + i].l_stt = grid[j * nb_box_w + i].stt;
-            if (grid[j * nb_box_w + i].stt)
+            grid[j * nb_cell_w + i].l_stt = grid[j * nb_cell_w + i].stt;
+            if (grid[j * nb_cell_w + i].stt)
             {
                 if (neigh_alive < 2 || neigh_alive > 3)
-                    grid[j * nb_box_w + i].stt = false;
+                    grid[j * nb_cell_w + i].stt = false;
             }
             else
             {
                 if (neigh_alive == 3)
                 {
-                    grid[j * nb_box_w + i].stt = true;
+                    grid[j * nb_cell_w + i].stt = true;
                     if (i < left_lim)
                         left_lim = i;
                     if (i > right_lim)
@@ -636,9 +669,9 @@ void one_step_ahead()
                         bottom_lim = j;
                 }
             }
-            grid[j * nb_box_w + i].updated = true;
+            grid[j * nb_cell_w + i].updated = true;
             if(j >= j0 +2)
-                grid[(j-2) * nb_box_w + i].updated = false;
+                grid[(j-2) * nb_cell_w + i].updated = false;
         }
     }
 
@@ -646,45 +679,32 @@ void one_step_ahead()
     {
         for (int i = left_lim - 1; i <= right_lim + 1; i++)
         {
-            grid[j * nb_box_w + i].updated = false;
+            grid[j * nb_cell_w + i].updated = false;
         }
     }
 }
 
-bool zone_intersect(recta zone_1, recta zone_2)
+point get_clk_cell(POINT m_coords)
 {
-    if (zone_1.x < zone_2.x + zone_2.w && zone_1.x + zone_1.w > zone_2.x &&
-        zone_1.y < zone_2.y + zone_2.h && zone_1.y + zone_1.h > zone_2.y)
-        return true;
-    return false;
-}
-
-point get_clk_box(POINT m_coords)
-{
-    int i = (m_coords.x/zoom_ratio_x + bmp_pos.x) / box_w;
-    int j = (m_coords.y/zoom_ratio_y + bmp_pos.y) / box_h;
+    int i = (m_coords.x/zoom_ratio_x + bmp_zone.x) / cell_w;
+    int j = (m_coords.y/zoom_ratio_y + bmp_zone.y) / cell_h;
     return { i, j };
 }
 int get_step_int()
 {
     int result = 0;
-    for (int i = 0; i < num_crctrs; i++)
-        result += int(step_str[i] - '0') * pow(10, num_crctrs - i - 1);
+    for (int i = 0; i < step_str.size(); i++)
+        result += int(step_str[i] - '0') * pow(10, step_str.size() - i - 1);
     return result;
-}
-
-recta get_im_zone(image my_im)
-{
-    return recta{ my_im.pos.x, my_im.pos.y, my_im.w, my_im.h };
 }
 
 void reinit_grid()
 {
     for (int i = left_lim; i <= right_lim; i++)
         for (int j = top_lim; j <= bottom_lim ; j++)
-            grid[j * nb_box_w + i].stt = false;
+            grid[j * nb_cell_w + i].stt = false;
     for (auto square : grid_init_stt)
-        grid[square.y * nb_box_w + square.x].stt = true;
+        grid[square.y * nb_cell_w + square.x].stt = true;
 
     top_lim = top_lim0;
     left_lim = left_lim0;
@@ -721,7 +741,7 @@ void insert_dlg_box(std::string str, std::string title, recta zone, uint32 color
 
         ok_zone.y = txt_zone.y + txt_zone.h + char_size.y;
         zone.h = ok_zone.y + ok_zone.h - zone.y + 2 * char_size.y;
-    } while (zone.y + zone.h > bmp_h);
+    } while (zone.y + zone.h > screen_zone.h);
 
     recta title_zone = { zone.x + 3 * char_size.x/2, zone.y + char_size.y/2 , zone.w - 3 * char_size.x,  3*char_size.y };
 
@@ -777,9 +797,9 @@ void openf_change_dir(int idx_f)
             if (my_file.is_open())
             {
                 int k;
-                for (int i = 0; i < nb_box_w; i++)
+                for (int i = 0; i < nb_cell_w; i++)
                 {
-                    for (int j = 0; j < nb_box_h; j++)
+                    for (int j = 0; j < nb_cell_h; j++)
                     {
                         my_file >> k;
                         if (k != 0 && k != 1)
@@ -787,7 +807,7 @@ void openf_change_dir(int idx_f)
                             f_error_dlg = true;
                             break;
                         }
-                        grid[j * nb_box_w + i].stt = (k != 0);
+                        grid[j * nb_cell_w + i].stt = (k != 0);
                         if (k)
                             grid_init_stt.push_back(point{ i,j });
                     }
@@ -895,7 +915,19 @@ void openf_change_dir(int idx_f)
     }
 }
 
-void make_inside(recta& zone, recta& limits)
+void make_inside(recta& zone, const recta& limits)
+{
+    if (zone.x < limits.x)
+        zone.x = limits.x;
+    if (zone.x + zone.w > limits.x + limits.w)
+        zone.x = limits.x + limits.w - zone.w;
+    if (zone.y < limits.y)
+        zone.y = limits.y;
+    if (zone.y + zone.h > limits.y + limits.h)
+        zone.y = limits.y + limits.h - zone.h;
+}
+
+void make_inside(r_recta& zone, const recta& limits)
 {
     if (zone.x < limits.x)
         zone.x = limits.x;
@@ -908,7 +940,7 @@ void make_inside(recta& zone, recta& limits)
 }
 
 // assures first tat a >= low then that a <= up, could pass through both and order is important
-void make_inside(int& a, int low, int up)
+void make_inside(int& a, const int& low, const int& up)
 {
     if (a < low)
         a = low;
@@ -916,7 +948,7 @@ void make_inside(int& a, int low, int up)
         a = up;
 }
 
-void make_inside(int& a, int&& low, int&& up)
+void make_inside(double& a, const int& low, const int& up)
 {
     if (a < low)
         a = low;
@@ -932,7 +964,7 @@ void update_wnd(HDC device_context, RECT* client_rect)
     int client_h = client_rect->bottom - client_rect->top;
     StretchDIBits(device_context,
         0, 0, client_w, client_h,
-        0, 0, bmp_w, bmp_h,
+        0, 0, screen_zone.w, screen_zone.h,
         bmp_memory,
         &bmp_info,
         DIB_RGB_COLORS, SRCCOPY);
@@ -999,6 +1031,7 @@ wnd_callback(HWND wnd,
     {
     case WM_LBUTTONDOWN:
     {         
+        OutputDebugStringA("down\n");
         my_mouse.l_down = true;
         mouse_coords_ldown.x = GET_X_LPARAM(lp);
         mouse_coords_ldown.y = GET_Y_LPARAM(lp);
@@ -1009,29 +1042,23 @@ wnd_callback(HWND wnd,
                 show_cursor = true;
                 cursor_timer = 0;
                 slct_mode = true;
-                if (slctd_nbr > 0)
-                    slctd_nbr = 0;
-                int block = (mouse_coords_ldown.x - initial_curs_pos.x + num_width / 2) / num_width;
-                if (block <= num_crctrs)
-                    my_cursor.pos.x = initial_curs_pos.x + block * num_width;
-                else
-                    my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
-                initial_slct_x = my_cursor.pos.x;
+                int num_idx = (mouse_coords_ldown.x - initial_curs_x + num_width/ 2) / num_width;
+                initial_slct_idx = min(num_idx, step_str.size());
+                my_cursor.scr_zone.x = initial_curs_x +  initial_slct_idx* num_width;
+                mouse_slct_idx = initial_slct_idx;
             }
             else
-            {
                 show_cursor = false;
-                slctd_nbr = 0;
-            }
-            if (in_zone(mouse_coords_ldown, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
+
+            if (in_zone(mouse_coords_ldown, { intens_slct.scr_zone.x, intens_slct.scr_zone.y, intens_slct.scr_zone.w, intens_slct.scr_zone.h }))
                 int_bar_slctd = true;
-            else if (in_zone(mouse_coords_ldown, go_butt_zone))
+            else if (in_zone(mouse_coords_ldown, go_butt[0].scr_zone))
                 go_butt_down = true;
-            else if (in_zone(mouse_coords_ldown, play_butt_zone))
+            else if (in_zone(mouse_coords_ldown, play_butt[0].scr_zone))
                 plpau_down = true;
-            else if (in_zone(mouse_coords_ldown, reinit_butt_zone))
+            else if (in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone))
                 reinit_down = true;
-            else if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
+            else if (in_zone(mouse_coords_ldown, next_butt[0].scr_zone))
                 next_down = true;
             else if (show_map && in_zone(mouse_coords_ldown, region_slct_zone))
             {
@@ -1040,17 +1067,13 @@ wnd_callback(HWND wnd,
                 int last_y = bmp_region_zone.y;
                 
                 // regulating the size adjusting for ratio problms
-                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
-                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
-
+                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h;
+                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w;
                 bmp_region_zone.x = mouse_coords_ldown.x - bmp_region_zone.w / 2;
                 bmp_region_zone.y = mouse_coords_ldown.y - bmp_region_zone.h / 2;
-
                 make_inside(bmp_region_zone, region_slct_zone);
-                
-                bmp_pos.x += (bmp_region_zone.x - last_x) * box_w / map_box_w;
-                bmp_pos.y += (bmp_region_zone.y - last_y) * box_w / map_box_w;
-                
+                bmp_zone.x += (bmp_region_zone.x - last_x) * cell_w / map_cell_w;
+                bmp_zone.y += (bmp_region_zone.y - last_y) * cell_w / map_cell_w;
                 region_pos0.x = bmp_region_zone.x;
                 region_pos0.y = bmp_region_zone.y;
             }
@@ -1067,7 +1090,6 @@ wnd_callback(HWND wnd,
                         f_href += file_h;
                     else
                         f_href += (d0 - d1);
-                    
                     make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
@@ -1080,7 +1102,6 @@ wnd_callback(HWND wnd,
                         f_href -= file_h;
                     else
                         f_href -= file_h - (d0 - d1);
-
                     make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
@@ -1094,10 +1115,7 @@ wnd_callback(HWND wnd,
                 {
                     int dir_sign = (scrler_zone.y - mouse_coords_ldown.y > 0) ? -1 : 1;
                     scrler_zone.y += dir_sign * scrler_zone.h * 0.7;
-                    if (scrler_zone.y + scrler_zone.h > scrl_zone.y + scrl_zone.h)
-                        scrler_zone.y = scrl_zone.y + scrl_zone.h - scrler_zone.h;
-                    if (scrler_zone.y < scrl_zone.y)
-                        scrler_zone.y = scrl_zone.y;
+                    make_inside(scrler_zone.y, scrl_zone.y, scrl_zone.y + scrl_zone.h - scrler_zone.h);
                     f_href = draw_f_zone.y - (scrler_zone.y - scrl_zone.y) * scrl_ratio;
                     scrl_timer = 0;
                     scrler_attrctng = true;
@@ -1127,6 +1145,7 @@ wnd_callback(HWND wnd,
     }break;
     case WM_LBUTTONUP:
     {
+        OutputDebugStringA("up\n");
         mouse_coords_lup.x = GET_X_LPARAM(lp);
         mouse_coords_lup.y = GET_Y_LPARAM(lp);
         //OutputDebugStringA("MOUSE_l_UP \n");
@@ -1150,6 +1169,7 @@ wnd_callback(HWND wnd,
     }break;
     case WM_RBUTTONDOWN:
     {
+        OutputDebugStringA("up\n");
         mouse_coords_rdown.x = GET_X_LPARAM(lp);
         mouse_coords_rdown.y = GET_Y_LPARAM(lp);
         my_mouse.r_down = true;
@@ -1159,11 +1179,11 @@ wnd_callback(HWND wnd,
             recta map_zone = { 0,0,0,0 };
             if (show_map)
             {
-                sh_hide_zone = get_im_zone(hide);
+                sh_hide_zone = hide.scr_zone;
                 map_zone = region_slct_zone;
             }
             else
-                sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
+                sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
             if (!in_zone(mouse_coords_rdown, menu_zone) && !in_zone(mouse_coords_rdown, sh_hide_zone) && !in_zone(mouse_coords_rdown, map_zone))
             {
                 gif_slct_mode = true;
@@ -1179,10 +1199,10 @@ wnd_callback(HWND wnd,
 
         if (gif_saving)
         {
-            if(in_zone(mouse_coords_rup, { 0,0,bmp_w,bmp_h }) && in_zone(mouse_coords_rdown, { 0,0,bmp_w,bmp_h }))
+            if(in_zone(mouse_coords_rup, screen_zone) && in_zone(mouse_coords_rdown, screen_zone))
             {
-                gif_rg0 = get_clk_box(mouse_coords_rdown);
-                gif_rg1 = get_clk_box(mouse_coords_rup);
+                gif_rg0 = get_clk_cell(mouse_coords_rdown);
+                gif_rg1 = get_clk_cell(mouse_coords_rup);
                 point temp = gif_rg0;
                 gif_rg0 = { min(temp.x, gif_rg1.x), min(temp.y, gif_rg1.y) };
                 gif_rg1 = { max(temp.x, gif_rg1.x), max(temp.y, gif_rg1.y) };
@@ -1197,25 +1217,25 @@ wnd_callback(HWND wnd,
 
     case WM_LBUTTONDBLCLK:
     {
+        OutputDebugStringA("dblclk\n");
         my_mouse.l_down = true;
         if(normal_mode)
         {
-            if (in_zone(mouse_coords_lup, { intens_slct.pos.x, intens_slct.pos.y, intens_slct.w, intens_slct.h }))
+            if (in_zone(mouse_coords_lup, { intens_slct.scr_zone.x, intens_slct.scr_zone.y, intens_slct.scr_zone.w, intens_slct.scr_zone.h }))
                 int_bar_slctd = true;
-            else if (in_zone(mouse_coords_ldown, go_butt_zone))
+            else if (in_zone(mouse_coords_ldown, go_butt[0].scr_zone))
                 go_butt_down = true;
-            else if (in_zone(mouse_coords_ldown, play_butt_zone))
+            else if (in_zone(mouse_coords_ldown, play_butt[0].scr_zone))
                 plpau_down = true;
-            else if (in_zone(mouse_coords_ldown, reinit_butt_zone))
+            else if (in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone))
                 reinit_down = true;
-            else if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)))
+            else if (in_zone(mouse_coords_ldown, next_butt[0].scr_zone))
                 next_down = true;
             else if (in_zone(mouse_coords_lup, step_slct_zone))
             {
-                my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
-                slctd_nbr = num_crctrs;
-                for (int i = 0; i < slctd_nbr; i++)
-                    slctd_nums[i] = i;
+                my_cursor.scr_zone.x = initial_curs_x + step_str.size()* num_width;
+                initial_slct_idx = 0;
+                mouse_slct_idx = step_str.size();
             }
         }
         else if (open_file )
@@ -1232,18 +1252,14 @@ wnd_callback(HWND wnd,
                 if (in_zone(mouse_coords_ldown, scrl_up_zone))
                 {
                     f_href += file_h;
-
                     make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
-
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
                 if (in_zone(mouse_coords_ldown, scrl_down_zone))
                 {
                     f_href -= file_h;
-
                     make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
-
                     scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
                     scrl_timer = 0;
                 }
@@ -1251,10 +1267,7 @@ wnd_callback(HWND wnd,
                 {
                     int dir_sign = (scrler_zone.y - mouse_coords_ldown.y > 0) ? -1 : 1;
                     scrler_zone.y += dir_sign * scrler_zone.h * 0.7;
-                    if (scrler_zone.y + scrler_zone.h > scrl_zone.y + scrl_zone.h)
-                        scrler_zone.y = scrl_zone.y + scrl_zone.h - scrler_zone.h;
-                    if (scrler_zone.y < scrl_zone.y)
-                        scrler_zone.y = scrl_zone.y;
+                    make_inside(scrler_zone.y, scrl_zone.y, scrl_zone.y + scrl_zone.h - scrler_zone.h);
                     f_href = draw_f_zone.y - (scrler_zone.y - scrl_zone.y) * scrl_ratio;
                     scrl_timer = 0;
                     scrler_attrctng = true;
@@ -1274,9 +1287,7 @@ wnd_callback(HWND wnd,
             {
                 int dir = delta > 0 ? 1 : -1;
                 f_href += dir * 2 * file_h;
-
                 make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
-
                 scrler_zone.y = scrl_zone.y + (draw_f_zone.y - f_href) / scrl_ratio;
             }
         }
@@ -1285,39 +1296,31 @@ wnd_callback(HWND wnd,
             bool zoom_chng_dir = false;
             if (zoom_in && delta < 0 || !zoom_in && delta>0)
                 zoom_chng_dir = true;
-            double new_w1_targ = zoom_chng_dir ? bmp_w1 - delta : bmp_w1_targ - delta;
+            int new_w1_targ = zoom_chng_dir ? bmp_zone.w - delta : bmp_zone_targ.w - delta;
             if (zoom_chng_dir)
                 zooming = false;
-            if (new_w1_targ > 8 * box_w) // setting a limit for zoom in  
+            if (new_w1_targ > 8 * cell_w) // setting a limit for zoom in  
             {
-                int new_box_w = box_w * bmp_w / new_w1_targ;
-                if (new_box_w > 12) // setting a limit for zoom out 
+                int new_cell_w = cell_w * screen_zone.w / new_w1_targ;
+                if (new_cell_w > 12) // setting a limit for zoom out 
                 {
                     if (!zooming)
                     {
-                        bmp_pos_targ = bmp_pos;
+                        bmp_zone_targ = bmp_zone;
                         zooming = true;
                     }
                     zoom_in = delta > 0 ? true : false;
-                    bmp_w1_targ = new_w1_targ;
+                    bmp_zone_targ.w = new_w1_targ;
+                    bmp_zone_targ.x = mouse_coords.x * (bmp_zone.w - bmp_zone_targ.w) / screen_zone.w + bmp_zone.x;
+                    make_inside(bmp_zone_targ.x, 0, nb_cell_w* cell_w - bmp_zone_targ.w);
 
-                    bmp_pos_targ.x = mouse_coords.x * (bmp_w1 - bmp_w1_targ) / bmp_w + bmp_pos.x;
+                    bmp_zone_targ.h = screen_zone.h * bmp_zone_targ.w / screen_zone.w;
+                    bmp_zone_targ.y = mouse_coords.y * (bmp_zone.h - bmp_zone_targ.h) / screen_zone.h + bmp_zone.y;
+                    make_inside(bmp_zone_targ.y, 0, nb_cell_h* cell_h - bmp_zone_targ.h);
 
-                    if (bmp_pos_targ.x + bmp_w1_targ >= nb_box_w * box_w)
-                        bmp_pos_targ.x = nb_box_w * box_w - bmp_w1_targ;
-                    if (bmp_pos_targ.x < 0)
-                        bmp_pos_targ.x = 0;
-
-                    bmp_h1_targ = bmp_h * bmp_w1_targ / bmp_w;
-                    bmp_pos_targ.y = mouse_coords.y * (bmp_h1 - bmp_h1_targ) / bmp_h + bmp_pos.y;
-                    if (bmp_pos_targ.y + bmp_h1_targ >= nb_box_h * box_h)
-                        bmp_pos_targ.y = nb_box_h * box_h - bmp_h1_targ;
-                    if (bmp_pos_targ.y < 0)
-                        bmp_pos_targ.y = 0;
-                    zoom_speed = std::abs(bmp_w1_targ - bmp_w1) * 3.5;
-                    pos_zpeed_x = zoom_speed * std::abs(bmp_pos_targ.x - bmp_pos.x) / std::abs(bmp_w1_targ - bmp_w1);
-                    pos_zpeed_y = zoom_speed * std::abs(bmp_pos_targ.y - bmp_pos.y) / std::abs(bmp_w1_targ - bmp_w1);
-
+                    zoom_speed = std::abs(int(bmp_zone_targ.w) - bmp_zone.w) * 3.5;
+                    pos_zpeed_x = zoom_speed * std::abs(bmp_zone_targ.x - bmp_zone.x) / std::abs(bmp_zone_targ.w - bmp_zone.w);
+                    pos_zpeed_y = zoom_speed * std::abs(bmp_zone_targ.y - bmp_zone.y) / std::abs(bmp_zone_targ.w - bmp_zone.w);
                 }
             }
         }
@@ -1328,96 +1331,106 @@ wnd_callback(HWND wnd,
     {
         if(show_cursor)
         {
-            if (slctd_nbr > 0)
+            if(!slct_mode)
             {
                 char my_num = MapVirtualKeyW(wp, MAPVK_VK_TO_CHAR);
                 if ((my_num >= '0' && my_num <= '9'))
                 {
-                    if (my_cursor.pos.x > initial_curs_pos.x + slctd_nums[0] * num_width)
-                        my_cursor.pos.x -= slctd_nbr * num_width;
-                    for (int i = 0; i < slctd_nbr; i++)
+                    if (initial_slct_idx != mouse_slct_idx)
                     {
-                        step_str.erase(step_str.begin() + slctd_nums[i]);
-                        num_crctrs--;
+                        int min_i = min(initial_slct_idx, mouse_slct_idx);
+                        int max_i = max(initial_slct_idx, mouse_slct_idx);
+
+                        my_cursor.scr_zone.x = initial_curs_x + min_i * num_width;
+                        step_str.erase(step_str.begin() + min_i, step_str.begin() + max_i);
+                        initial_slct_idx = mouse_slct_idx = min_i;
                     }
-                    slctd_nbr = 0;
                     cursor_timer = 0;
-
-                    int index = (my_cursor.pos.x - initial_curs_pos.x) / num_width;
-                    step_str.insert(step_str.begin() + index, my_num);
-                    num_crctrs++;
-                    my_cursor.pos.x += num_width;
+                    if (step_str.size() < max_crctrs)
+                    {
+                        int index = (my_cursor.scr_zone.x - initial_curs_x) / num_width;
+                        step_str.insert(step_str.begin() + index, 1, my_num);
+                        my_cursor.scr_zone.x += num_width;
+                        initial_slct_idx = mouse_slct_idx = index + 1;
+                    }
                 }
-            }
-            else if (num_crctrs < 5)
-            {
-                char my_num;
-                if (wp >= '0' && wp <= '9')
-                    my_num = wp;
-                else
-                    my_num = MapVirtualKeyW(wp, MAPVK_VK_TO_CHAR);
-
-                if (my_num >= '0' && my_num <= '9')
-                {
-                    int index = (my_cursor.pos.x - initial_curs_pos.x) / num_width;
-                    step_str.insert(step_str.begin() + index, my_num);
-                    num_crctrs++;
-                    my_cursor.pos.x += num_width;
-                }
-                //num_queue.push(my_num);
             }
             switch (wp)
             {
                 case VK_LEFT:
                 {
-                    if (!slct_mode && slctd_nbr > 0)
+                    if (!slct_mode)
                     {
-                        slctd_nbr = 0;
-                    }
-                    else if (my_cursor.pos.x - initial_curs_pos.x > 0)
-                    {
-                        my_cursor.pos.x -= num_width;
+                        if (GetKeyState(VK_SHIFT) & 0xf0)
+                        {
+                            if (mouse_slct_idx - 1 >= 0)
+                            {
+                                mouse_slct_idx--;
+                                my_cursor.scr_zone.x -= num_width;
+                            }
+                        }
+                        else
+                        {
+                            if (initial_slct_idx != mouse_slct_idx)
+                                my_cursor.scr_zone.x = initial_curs_x + min(initial_slct_idx, mouse_slct_idx) * num_width;
+                            else if (my_cursor.scr_zone.x - initial_curs_x > 0)
+                                my_cursor.scr_zone.x -= num_width;
+                            initial_slct_idx = mouse_slct_idx = (my_cursor.scr_zone.x - initial_curs_x) / num_width;;
+                        }
                         cursor_timer = 0;
                     }
+
                 }break;
                 case VK_RIGHT:
                 {
-                    if (!slct_mode && slctd_nbr > 0)
+                    if(!slct_mode)
                     {
-                        slctd_nbr = 0;
-                    }
-                    else if ((my_cursor.pos.x - initial_curs_pos.x) / num_width < num_crctrs)
-                    {
-                        my_cursor.pos.x += num_width;
-                        cursor_timer = 0;
+                        if (GetKeyState(VK_SHIFT) & 0xf0)
+                        {
+                            if(mouse_slct_idx + 1 <= step_str.size())
+                            {
+                                mouse_slct_idx++;
+                                my_cursor.scr_zone.x += num_width;
+                            }
+                        }
+                        else
+                        {
+                            if (initial_slct_idx != mouse_slct_idx)
+                                my_cursor.scr_zone.x = initial_curs_x + max(initial_slct_idx, mouse_slct_idx) * num_width;
+
+                            else if ((my_cursor.scr_zone.x - initial_curs_x) / num_width < step_str.size())
+                                my_cursor.scr_zone.x += num_width;
+                            initial_slct_idx = mouse_slct_idx = (my_cursor.scr_zone.x - initial_curs_x) / num_width;;
+                            cursor_timer = 0;
+                        }
                     }
                 }break;
                 case VK_BACK:
                 {
-                    if (!slct_mode && slctd_nbr > 0)
+                    if (!slct_mode)
                     {
-                        if (my_cursor.pos.x > initial_curs_pos.x + slctd_nums[0] * num_width)
-                            my_cursor.pos.x -= slctd_nbr * num_width;
-                        for (int i = 0; i < slctd_nbr; i++)
+                        if (initial_slct_idx != mouse_slct_idx)
                         {
-                            step_str.erase(step_str.begin() + slctd_nums[i]);
-                            num_crctrs--;
-                        }
-                        slctd_nbr = 0;
-                        cursor_timer = 0;
+                            int min_i = min(initial_slct_idx, mouse_slct_idx);
+                            int max_i = max(initial_slct_idx, mouse_slct_idx);
 
-                    }
-                    else
-                    {
-                        int index = (my_cursor.pos.x - initial_curs_pos.x) / num_width;
-                        if (index > 0)
-                        {
-                            step_str.erase(step_str.begin() + index - 1);
-                            num_crctrs--;
-                            my_cursor.pos.x -= num_width;
-                            cursor_timer = 0;
+                            my_cursor.scr_zone.x = initial_curs_x + min_i * num_width;
+                            step_str.erase(step_str.begin() + min_i, step_str.begin() + max_i);
+                            initial_slct_idx = mouse_slct_idx = min_i;
                         }
+                        else
+                        {
+                            int index = (my_cursor.scr_zone.x - initial_curs_x) / num_width;
+                            if (index > 0)
+                            {
+                                step_str.erase(step_str.begin() + index - 1);
+                                my_cursor.scr_zone.x -= num_width;
+                            }
+                            initial_slct_idx = mouse_slct_idx = max(index - 1, 0);
+                        }
+                        cursor_timer = 0;
                     }
+                    
                 }break;
                 case VK_RETURN:
                 {
@@ -1503,7 +1516,6 @@ wnd_callback(HWND wnd,
                 }
                 else
                 {
-
                     if (my_mouse.l_down)
                         h_curs = LoadCursor(NULL, IDC_SIZEALL);
                     else
@@ -1516,8 +1528,7 @@ wnd_callback(HWND wnd,
         else {
             my_mouse = initial_mouse;
         }
-    }
-        break;
+    }break;
     case WM_PAINT:
     {
         PAINTSTRUCT Paint;
@@ -1552,7 +1563,6 @@ wnd_callback(HWND wnd,
         result = DefWindowProc(wnd, msg, wp, lp);
     } break;
     }
-
     return(result);
 }
 
@@ -1565,13 +1575,13 @@ void insert_region_slct()
     {
         for (int j = region_slct_zone.y; j < region_slct_zone.y + region_slct_zone.h; j++)
         {
-            int i0 = (i - region_slct_zone.x + int(map_pos.x)) / map_box_w;
-            int j0 = (j - region_slct_zone.y + int(map_pos.y)) / map_box_w;
+            int i0 = (i - region_slct_zone.x + int(map_pos.x)) / map_cell_w;
+            int j0 = (j - region_slct_zone.y + int(map_pos.y)) / map_cell_w;
 
-            if (grid[j0 * nb_box_w + i0].stt)
-                pixel[j * bmp_w + i] = light;
+            if (grid[j0 * nb_cell_w + i0].stt)
+                pixel[j * screen_zone.w + i] = light;
             else
-                pixel[j * bmp_w + i] = black;
+                pixel[j * screen_zone.w + i] = black;
         }
     }
 
@@ -1607,9 +1617,9 @@ void insert_clear_butt()
 
 void clear_grid()
 {
-    for (int i = 0; i < nb_box_w; i++)
-        for (int j = 0; j < nb_box_h; j++)
-            grid[j * nb_box_w + i].stt = false;
+    for (int i = 0; i < nb_cell_w; i++)
+        for (int j = 0; j < nb_cell_h; j++)
+            grid[j * nb_cell_w + i].stt = false;
     grid_init_stt.clear();
 }
 
@@ -1624,7 +1634,7 @@ void save_as_gif()
 {
     int nbw = gif_rg1.x - gif_rg0.x + 3;
     int nbh = gif_rg1.y - gif_rg0.y + 3;
-    int gbxw = box_w * zoom_ratio_x;
+    int gbxw = cell_w * zoom_ratio_x;
     int width = nbw * gbxw;
     int height = nbh * gbxw;
 
@@ -1654,7 +1664,7 @@ void save_as_gif()
                     int bx_i = i / gbxw + gif_rg0.x - 1;
                     int bx_j = j / gbxw + gif_rg0.y - 1;
 
-                    if (grid[bx_j * nb_box_w + bx_i].stt)
+                    if (grid[bx_j * nb_cell_w + bx_i].stt)
                     {
                         gif_frame[pix_addr * 4] = 127;
                         gif_frame[pix_addr * 4 + 1] = 127;
@@ -1726,9 +1736,9 @@ void save_config(HWND wnd)
 
                         if (my_file.is_open())
                         {
-                            for (int i = 0; i < nb_box_w; i++)
-                                for (int j = 0; j < nb_box_h; j++)
-                                    my_file << int(grid[j * nb_box_w + i].stt) << " ";
+                            for (int i = 0; i < nb_cell_w; i++)
+                                for (int j = 0; j < nb_cell_h; j++)
+                                    my_file << int(grid[j * nb_cell_w + i].stt) << " ";
                         }
                         my_file.close();
                         break;
@@ -1767,17 +1777,18 @@ WinMain(HINSTANCE Instance,
     HINSTANCE PrevInstance,
     LPSTR CommandLine,
     int ShowCode)
-    {
-    bmp_w = 0.8*GetSystemMetrics(SM_CXSCREEN);
-    bmp_h = 0.8*GetSystemMetrics(SM_CYSCREEN);
-    bmp_w1 = bmp_w;
-    bmp_h1 = bmp_h;
-    bmp_w1_targ = bmp_w1;
-    bmp_h1_targ = bmp_h1;
-    zoom_ratio_x = bmp_w / bmp_w1;
-    zoom_ratio_y = bmp_h / bmp_h1;
-    bmp_pos = { double(nb_box_w * box_w - bmp_w) / 2, double(nb_box_h * box_h - bmp_h) / 2 };
-
+{
+    screen_zone.w = 0.8 * GetSystemMetrics(SM_CXSCREEN);
+    screen_zone.h = 0.8 * GetSystemMetrics(SM_CYSCREEN);
+    bmp_zone.w = screen_zone.w;
+    bmp_zone.h = screen_zone.h;
+    bmp_zone_targ.w = bmp_zone.w;
+    bmp_zone_targ.h = bmp_zone.h;
+    zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
+    zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
+    bmp_zone.x = double(nb_cell_w * cell_w - screen_zone.w) / 2;
+    bmp_zone.y = double(nb_cell_h * cell_h - screen_zone.h) / 2;
+    vbmp_zone = { 0, 0, nb_cell_w * cell_w, nb_cell_h * cell_h };
     // get current directory and fill the files_q
     get_curr_dir(curr_dir);
     WIN32_FIND_DATA ffd;
@@ -1818,7 +1829,7 @@ WinMain(HINSTANCE Instance,
         dialog_wnd.lpszClassName = "dialog_class";
         RegisterClassA(&dialog_wnd);
 
-        RECT client_area_rect = { 0, 0, bmp_w, bmp_h};
+        RECT client_area_rect = { 0, 0, screen_zone.w, screen_zone.h};
         AdjustWindowRect(&client_area_rect, WS_CAPTION | WS_MINIMIZEBOX | WS_VISIBLE , false);
         HWND wnd =
             CreateWindowExA(
@@ -1841,96 +1852,78 @@ WinMain(HINSTANCE Instance,
         {
             // load images
             main_wnd = wnd;
-            play_butt_0.pixels = (uint32*)stbi_load(play_butt_0_fn, &play_butt_0.w, &play_butt_0.h, NULL, 0);
-            play_butt_1.pixels = (uint32*)stbi_load(play_butt_1_fn, &play_butt_1.w, &play_butt_1.h, NULL, 0);
-            play_butt_2.pixels = (uint32*)stbi_load(play_butt_2_fn, &play_butt_2.w, &play_butt_2.h, NULL, 0);
-
-            pause_butt_0.pixels = (uint32*)stbi_load(pause_butt_0_fn, &pause_butt_0.w, &pause_butt_0.h, NULL, 0);
-            pause_butt_1.pixels = (uint32*)stbi_load(pause_butt_1_fn, &pause_butt_1.w, &pause_butt_1.h, NULL, 0);
-            pause_butt_2.pixels = (uint32*)stbi_load(pause_butt_2_fn, &pause_butt_2.w, &pause_butt_2.h, NULL, 0);
-
-            reinit_butt.pixels = (uint32*)stbi_load(reinit_butt_fn, &reinit_butt.w, &reinit_butt.h, NULL, 0);
-            reinit_butt_1.pixels = (uint32*)stbi_load(reinit_butt_1_fn, &reinit_butt_1.w, &reinit_butt_1.h, NULL, 0);
-            reinit_butt_2.pixels = (uint32*)stbi_load(reinit_butt_2_fn, &reinit_butt_2.w, &reinit_butt_2.h, NULL, 0);
-
-            next_butt.pixels = (uint32*)stbi_load(next_butt_fn, &next_butt.w, &next_butt.h, NULL, 0);
-            next_butt_1.pixels = (uint32*)stbi_load(next_butt_1_fn, &next_butt_1.w, &next_butt_1.h, NULL, 0);
-            next_butt_2.pixels = (uint32*)stbi_load(next_butt_2_fn, &next_butt_2.w, &next_butt_2.h, NULL, 0);
-
+            for (int i = 0; i < 3; i++)
+            {
+                play_butt[i].pixels   = (uint32*)stbi_load(play_butt_fn[i], &play_butt[i].w, &play_butt[i].h, NULL, 0);
+                pause_butt[i].pixels  = (uint32*)stbi_load(pause_butt_fn[i], &pause_butt[i].w, &pause_butt[i].h, NULL, 0);
+                reinit_butt[i].pixels = (uint32*)stbi_load(reinit_butt_fn[i], &reinit_butt[i].w, &reinit_butt[i].h, NULL, 0);
+                next_butt[i].pixels   = (uint32*)stbi_load(next_butt_fn[i], &next_butt[i].w, &next_butt[i].h, NULL, 0);
+                go_butt[i].pixels     = (uint32*)stbi_load(go_butt_fn[i], &go_butt[i].w, &go_butt[i].h, NULL, 0);
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                scrl_up[i].pixels = (uint32*)stbi_load(scrl_up_fn[i], &scrl_up[i].w, &scrl_up[i].h, NULL, 0);
+                scrl_down[i].pixels = (uint32*)stbi_load(scrl_down_fn[i], &scrl_down[i].w, &scrl_down[i].h, NULL, 0);
+            }
             intens_slct.pixels = (uint32*)stbi_load(intens_slct_fn, &intens_slct.w, &intens_slct.h, NULL, 0);
             intens_bar.pixels = (uint32*)stbi_load(intens_bar_fn, &intens_bar.w, &intens_bar.h, NULL, 0);
-
             my_cursor.pixels = (uint32*)stbi_load(cursor_fn, &my_cursor.w, &my_cursor.h, NULL, 0);
-
-            go_butt.pixels = (uint32*)stbi_load(go_butt_fn, &go_butt.w, &go_butt.h, NULL, 0);
-            go_butt_1.pixels = (uint32*)stbi_load(go_butt_1_fn, &go_butt_1.w, &go_butt_1.h, NULL, 0);
-            go_butt_2.pixels = (uint32*)stbi_load(go_butt_2_fn, &go_butt_2.w, &go_butt_2.h, NULL, 0);
             num_letters.pixels = (uint32*)stbi_load(num_letters_fn, &num_letters.w, &num_letters.h, NULL, 0);
             hide.pixels = (uint32*)stbi_load(hide_fn, &hide.w, &hide.h, NULL, 0);
             anti_hide.pixels = (uint32*)stbi_load(anti_hide_fn, &anti_hide.w, &anti_hide.h, NULL, 0);
-            save_butt.pixels = (uint32*)stbi_load(save_butt_fn, &save_butt.w, &save_butt.h, NULL, 0);
-
-            scrl_up.pixels = (uint32*)stbi_load(scrl_up_fn, &scrl_up.w, &scrl_up.h, NULL, 0);
-            scrl_down.pixels = (uint32*)stbi_load(scrl_down_fn, &scrl_down.w, &scrl_down.h, NULL, 0);
-            scrl_up1.pixels = (uint32*)stbi_load(scrl_up1_fn, &scrl_up1.w, &scrl_up1.h, NULL, 0);
-            scrl_down1.pixels = (uint32*)stbi_load(scrl_down1_fn, &scrl_down1.w, &scrl_down1.h, NULL, 0);
             folder_icon.pixels = (uint32*)stbi_load(folder_icon_fn, &folder_icon.w, &folder_icon.h, NULL, 0);
 
             // set different zones and positions
-            menu_zone = { int(0.005 * bmp_w),int(0.005 * bmp_h),int(0.48 * bmp_w),int(0.13*bmp_h)}; // 800, 120 
-            pause_butt_0.pos = { menu_zone.x, menu_zone.y};
-            pause_butt_1.pos = pause_butt_0.pos;
-            pause_butt_2.pos = pause_butt_0.pos;
-            play_butt_0.pos  = pause_butt_0.pos;
-            play_butt_1.pos  = pause_butt_0.pos;
-            play_butt_2.pos = pause_butt_0.pos;
+            menu_zone = { 4,4,int(0.60 * screen_zone.w),int(0.15*screen_zone.h)};
+            num_width = menu_zone.w / 60;
+            num_height = menu_zone.h / 4;
 
-            next_butt.pos = { play_butt_0.pos.x + (play_butt_0.w - next_butt.w)/2, play_butt_0.pos.y + play_butt_0.h + menu_zone.h/24 };
-            next_butt_1.pos = next_butt.pos;
-            next_butt_2.pos = next_butt.pos;
+            pause_butt[0].scr_zone  = { menu_zone.x, menu_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24};
+            play_butt[0].scr_zone   = pause_butt[0].scr_zone;
+            next_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w / 96, play_butt[0].scr_zone.y + play_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16,  7*menu_zone.h / 24 };
+            reinit_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w/12 , play_butt[0].scr_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24 };
+            for (int i = 1; i < 3; i++)
+            {
+                pause_butt[i].scr_zone = pause_butt[0].scr_zone;
+                play_butt[i].scr_zone = play_butt[0].scr_zone;
+                next_butt[i].scr_zone = next_butt[0].scr_zone;
+                reinit_butt[i].scr_zone = reinit_butt[0].scr_zone;
+            }
 
-            reinit_butt.pos   = { play_butt_0.pos.x + play_butt_0.w + 1, play_butt_0.pos.y };
-            reinit_butt_1.pos = reinit_butt.pos;
-            reinit_butt_2.pos = reinit_butt.pos;
-
-            intens_bar.pos = { reinit_butt.pos.x + reinit_butt.w + menu_zone.w/20, int(menu_zone.h*7.0/12) };
-            intens_slct.pos = { intens_bar.pos.x - intens_slct.w / 2 , menu_zone.h/3 };
+            intens_bar.scr_zone = { menu_zone.x + 2*menu_zone.w/12 + menu_zone.w/80 + menu_zone.w/50, menu_zone.y + 3*menu_zone.h/5, menu_zone.w/3 - menu_zone.w/40 - 2 * num_width - menu_zone.w / 50, menu_zone.h/20};
+            intens_slct.scr_zone = { intens_bar.scr_zone.x - menu_zone.w/80, intens_bar.scr_zone.y + intens_bar.scr_zone.h/2 - menu_zone.h/4, menu_zone.w/40, menu_zone.h/2 };
             
-            play_butt_zone = { play_butt_0.pos.x, play_butt_0.pos.y, play_butt_0.w, play_butt_0.h };
-            reinit_butt_zone = { reinit_butt.pos.x, reinit_butt.pos.y, reinit_butt.w, reinit_butt.h };
-            step_slct_zone = { intens_bar.pos.x + intens_bar.w + int(menu_zone.w * 3.0 / 40), int(menu_zone.w * 9.0 / 160), 5 * num_width + 4, num_height + int(menu_zone.h * 2.0 / 15) };
-            go_butt.pos = { step_slct_zone.x + (step_slct_zone.w - go_butt.w)/2, step_slct_zone.y + step_slct_zone.h + int(menu_zone.h*1/12) };
-            go_butt_1.pos = go_butt.pos;
-            go_butt_2.pos = go_butt.pos;
+            step_slct_zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w/24, menu_zone.y + menu_zone.h / 3 , menu_zone.w / 12, num_height + 6};
             
-            go_butt_zone = { go_butt.pos.x, go_butt.pos.y, go_butt.w, go_butt.h };
-            go_to_stp_zone = { step_slct_zone.x - menu_zone.w/100, step_slct_zone.y - int(menu_zone.h * 25.0/120), step_slct_zone.w + int(menu_zone.w * 20.0 /800), int(menu_zone.h * 15.0 /120) };
-            actual_step_zone = { step_slct_zone.x + step_slct_zone.w + int(menu_zone.w * 1.0 /20), go_to_stp_zone.y, int(menu_zone.w * 150.0 /800), int(menu_zone.h * 13.0 /120) };
+            go_butt[0].scr_zone = { step_slct_zone.x , step_slct_zone.y + step_slct_zone.h + menu_zone.h/12, step_slct_zone.w, menu_zone.h / 4 };
+            go_butt[1].scr_zone = go_butt[0].scr_zone;
+            go_butt[2].scr_zone = go_butt[0].scr_zone;
+
+            go_to_stp_zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w / 48, step_slct_zone.y - menu_zone.h * 25/120, 3 * menu_zone.w / 24, menu_zone.h * 15/120 };
+            actual_step_zone = { menu_zone.x + 8 * menu_zone.w / 12 + menu_zone.w/48, go_to_stp_zone.y, 3*menu_zone.w/24 , menu_zone.h * 15 /120};
             
-            save_butt_zone = { actual_step_zone.x + actual_step_zone.w + int(menu_zone.w * 10.0 /800), actual_step_zone.y + int(menu_zone.h * 5.0 /120), int(menu_zone.w * 60.0 /800), int(menu_zone.h * 40.0 /120) };
-            open_butt_zone = { actual_step_zone.x + actual_step_zone.w + int(menu_zone.w * 10.0 /800), actual_step_zone.y + save_butt_zone.h + int(menu_zone.h * 10.0 /120), int(menu_zone.w * 60.0 /800), int(menu_zone.h * 40.0 /120) };
-            clear_butt_zone = { reinit_butt.pos.x + (reinit_butt.w - next_butt.w) / 2, next_butt.pos.y, next_butt.w, next_butt.h };
+            save_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 24, actual_step_zone.y + menu_zone.h * 5 /120, menu_zone.w / 12, menu_zone.h * 40/120 };
+            open_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 24, actual_step_zone.y + save_butt_zone.h + menu_zone.h * 10/120, menu_zone.w / 12, menu_zone.h * 40 /120};
+            clear_butt_zone = { reinit_butt[0].scr_zone.x + menu_zone.w / 96, reinit_butt[0].scr_zone.y + reinit_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16, 7 * menu_zone.h / 24 };
 
-            sim_vel_zone = { intens_bar.pos.x - int(menu_zone.w * 8.0 /800), go_to_stp_zone.y , intens_bar.w + int(menu_zone.w * 20.0 /800), int(menu_zone.h * 15.0 /120) };
-            region_slct_zone = { bmp_w - map_w- int(menu_zone.w * 20.0 /800), bmp_h - map_h- int(menu_zone.h * 20.0 /120), map_w, map_h};
-            map_pos = { double(nb_box_w * map_box_w - map_w) / 2 , double(nb_box_h * map_box_w - map_h) / 2 };
+            sim_vel_zone = { intens_bar.scr_zone.x - menu_zone.w * 8/800, go_to_stp_zone.y , intens_bar.scr_zone.w + menu_zone.w * 20/800, menu_zone.h * 15/120};
+            region_slct_zone = { screen_zone.w - map_w- menu_zone.w * 20/800, screen_zone.h - map_h- menu_zone.h * 20 /120, map_w, map_h};
+            map_pos = { double(nb_cell_w * map_cell_w - map_w) / 2 , double(nb_cell_h * map_cell_w - map_h) / 2 };
 
-            region_pos.x = bmp_pos.x * map_box_w / box_w - map_pos.x + region_slct_zone.x;
-            region_pos.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
-            bmp_region_zone.x = region_pos.x;
-            bmp_region_zone.y = region_pos.y;
-            bmp_region_zone.w = int(bmp_w1)*map_box_w / box_w;
-            bmp_region_zone.h = int(bmp_h1) * map_box_w / box_h;
+            bmp_region_zone.x = bmp_zone.x * map_cell_w / cell_w - map_pos.x + region_slct_zone.x;
+            bmp_region_zone.y = bmp_zone.y * map_cell_w / cell_w - map_pos.y + region_slct_zone.y;
+            bmp_region_zone.w = int(bmp_zone.w)*map_cell_w / cell_w;
+            bmp_region_zone.h = int(bmp_zone.h) * map_cell_w / cell_h;
 
-            hide.pos.x = region_slct_zone.x + region_slct_zone.w - hide.w + int(menu_zone.w * 3.0/800);
-            hide.pos.y = region_slct_zone.y - hide.h - int(menu_zone.h * 3.0/120);
-            anti_hide.pos.x = region_slct_zone.x + region_slct_zone.w - hide.w;
-            anti_hide.pos.y = region_slct_zone.y + region_slct_zone.h - hide.h;
+            hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w + menu_zone.w * 3/800;
+            hide.scr_zone.y = region_slct_zone.y - hide.h - menu_zone.h * 3.0/120;
+            anti_hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w;
+            anti_hide.scr_zone.y = region_slct_zone.y + region_slct_zone.h - hide.h;
 
-            my_cursor.pos = {step_slct_zone.x + 2, step_slct_zone.y + (step_slct_zone.h - my_cursor.h)/2};
-            initial_curs_pos = my_cursor.pos;
+            my_cursor.scr_zone = {step_slct_zone.x+1 , step_slct_zone.y + 2, 2, step_slct_zone.h - 4};
+            initial_curs_x = my_cursor.scr_zone.x;
 
-            open_f_zone = { bmp_w / 3, bmp_h / 5, bmp_w / 3, 3 * bmp_h / 5 };
+            open_f_zone = { screen_zone.w / 3, screen_zone.h / 5, screen_zone.w / 3, 3 * screen_zone.h / 5 };
             draw_f_zone_wscrl = { open_f_zone.x + open_f_zone.w / 20, open_f_zone.y + open_f_zone.h / 20, 18 * open_f_zone.w / 20, 16 * open_f_zone.h / 20 };
             draw_f_zone = draw_f_zone_wscrl;
             scrler_zone = { draw_f_zone.x + draw_f_zone.w - draw_f_zone.w / 16, draw_f_zone.y + draw_f_zone.h / 16 + 2, draw_f_zone.w / 16, draw_f_zone.h - 2* draw_f_zone.h / 16 - 4};
@@ -1951,13 +1944,13 @@ WinMain(HINSTANCE Instance,
             }
 
             bmp_info.bmiHeader.biSize = sizeof(bmp_info.bmiHeader);
-            bmp_info.bmiHeader.biWidth = bmp_w;
-            bmp_info.bmiHeader.biHeight = -bmp_h;
+            bmp_info.bmiHeader.biWidth = screen_zone.w;
+            bmp_info.bmiHeader.biHeight = -screen_zone.h;
             bmp_info.bmiHeader.biPlanes = 1;
             bmp_info.bmiHeader.biBitCount = 32;
             bmp_info.bmiHeader.biCompression = BI_RGB;
                 
-            int bmp_mem_size = (bmp_w * bmp_h) * bytes_per_pixel;
+            int bmp_mem_size = (screen_zone.w * screen_zone.h) * bytes_per_pixel;
             bmp_memory = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
 
             // Main Loop
@@ -1977,6 +1970,7 @@ WinMain(HINSTANCE Instance,
                     TranslateMessage(&Message);
                     DispatchMessageA(&Message);
                 }
+
                 // get mouse input
                 prev_mouse_coords = mouse_coords;
                 if (GetCursorPos(&mouse_coords))
@@ -1994,11 +1988,11 @@ WinMain(HINSTANCE Instance,
                     recta map_zone = { 0,0,0,0 };
                     if (show_map)
                     {
-                        sh_hide_zone = get_im_zone(hide);
+                        sh_hide_zone = hide.scr_zone;
                         map_zone = region_slct_zone;
                     }
                     else
-                        sh_hide_zone = { anti_hide.pos.x - 60, anti_hide.pos.y, anti_hide.w + 60, anti_hide.h };
+                        sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
 
                     // grid and region_select dragging
                     if (my_mouse.l_down && !zooming)
@@ -2008,8 +2002,8 @@ WinMain(HINSTANCE Instance,
                             if (in_zone(mouse_coords, region_slct_zone))
                             {
                                 // regulating the size adjusting for ratio problms
-                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
-                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
+                                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h;
+                                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w;
 
                                 // update region position
                                 bmp_region_zone.x = region_pos0.x + mouse_coords.x - mouse_coords_ldown.x;
@@ -2024,8 +2018,8 @@ WinMain(HINSTANCE Instance,
                                 }
                                 if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
                                 {
-                                    if (map_pos.x + map_w < nb_box_w * map_box_w)
-                                        map_pos.x = min(nb_box_w * map_box_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                                    if (map_pos.x + map_w < nb_cell_w * map_cell_w)
+                                        map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
                                     bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
                                 }
                                 if (bmp_region_zone.y <= region_slct_zone.y)
@@ -2036,40 +2030,25 @@ WinMain(HINSTANCE Instance,
                                 }
                                 if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
                                 {
-                                    if (map_pos.y + map_h < nb_box_h * map_box_w)
+                                    if (map_pos.y + map_h < nb_cell_h * map_cell_w)
                                     {
-                                        map_pos.y = min(nb_box_h * map_box_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                                        map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
                                     }
                                     bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
                                 }
 
                                 // update bitmap_pos and assert limits
-                                bmp_pos.x = (bmp_region_zone.x + map_pos.x - region_slct_zone.x) * box_w / map_box_w;
-                                bmp_pos.y = (bmp_region_zone.y + map_pos.y - region_slct_zone.y) * box_w / map_box_w;
+                                bmp_zone.x = (bmp_region_zone.x + map_pos.x - region_slct_zone.x) * cell_w / map_cell_w;
+                                bmp_zone.y = (bmp_region_zone.y + map_pos.y - region_slct_zone.y) * cell_w / map_cell_w;                                
+                                make_inside(bmp_zone, vbmp_zone);
 
-                                if (bmp_pos.x < 0)
-                                    bmp_pos.x = 0;
-                                if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
-                                    bmp_pos.x = nb_box_w * box_w - bmp_w1;
-                                if (bmp_pos.y < 0)
-                                    bmp_pos.y = 0;
-                                if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
-                                    bmp_pos.y = nb_box_h * box_h - bmp_h1;
                             }
                         }
                         else if (!in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
                         {
-                            bmp_pos.x -= (mouse_coords.x - prev_mouse_coords.x) / zoom_ratio_x;
-                            bmp_pos.y -= (mouse_coords.y - prev_mouse_coords.y) / zoom_ratio_y;
-
-                            if (bmp_pos.x < 0)
-                                bmp_pos.x = 0;
-                            if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
-                                bmp_pos.x = nb_box_w * box_w - bmp_w1;
-                            if (bmp_pos.y < 0)
-                                bmp_pos.y = 0;
-                            if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
-                                bmp_pos.y = nb_box_h * box_h - bmp_h1;
+                            bmp_zone.x -= (mouse_coords.x - prev_mouse_coords.x) / zoom_ratio_x;
+                            bmp_zone.y -= (mouse_coords.y - prev_mouse_coords.y) / zoom_ratio_y;
+                            make_inside(bmp_zone, vbmp_zone);
                         }
                     }
 
@@ -2082,20 +2061,20 @@ WinMain(HINSTANCE Instance,
                             {
                                 static int last_i;
                                 static int last_j;
-                                point act_box = get_clk_box(mouse_coords);
-                                int i = act_box.x;
-                                int j = act_box.y;
+                                point act_cell = get_clk_cell(mouse_coords);
+                                int i = act_cell.x;
+                                int j = act_cell.y;
                                 if (i != last_i || j != last_j)
                                 {
-                                    if (i != 0 && i != nb_box_w - 1 && j != 0 && j != nb_box_h - 1)
+                                    if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
                                     {
-                                        if (!grid[j * nb_box_w + i].stt)
+                                        if (!grid[j * nb_cell_w + i].stt)
                                             grid_init_stt.push_back(point{ i, j });
                                         else
                                             grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
-                                        if (i != 0 && i != nb_box_w - 1 && j != 0 && j != nb_box_h - 1)
-                                            grid[j * nb_box_w + i].stt = !grid[j * nb_box_w + i].stt;
-                                        if (grid[j * nb_box_w + i].stt)
+                                        if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
+                                            grid[j * nb_cell_w + i].stt = !grid[j * nb_cell_w + i].stt;
+                                        if (grid[j * nb_cell_w + i].stt)
                                         {
                                             if (i < left_lim)
                                                 left_lim = i;
@@ -2121,21 +2100,21 @@ WinMain(HINSTANCE Instance,
                             if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
                             {
                                 //OutputDebugStringA("MOUSE CLICKED HANDLING \n");
-                                point down_box = get_clk_box(mouse_coords_ldown);
-                                point up_box = get_clk_box(mouse_coords_lup);
-                                if (down_box == up_box)
+                                point down_cell = get_clk_cell(mouse_coords_ldown);
+                                point up_cell = get_clk_cell(mouse_coords_lup);
+                                if (down_cell == up_cell)
                                 {
-                                    //OutputDebugStringA("DOWN BOX + UP BOX \n");
-                                    int i = up_box.x;
-                                    int j = up_box.y;
+                                    //OutputDebugStringA("DOWN cell + UP cell \n");
+                                    int i = up_cell.x;
+                                    int j = up_cell.y;
 
-                                    if (!grid[j * nb_box_w + i].stt)
+                                    if (!grid[j * nb_cell_w + i].stt)
                                         grid_init_stt.push_back(point{ i, j });
                                     else
                                         grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
-                                    if (i != 0 && i != nb_box_w - 1 && j != 0 && j != nb_box_h - 1)
-                                        grid[j * nb_box_w + i].stt = !grid[j * nb_box_w + i].stt;
-                                    if (grid[j * nb_box_w + i].stt)
+                                    if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
+                                        grid[j * nb_cell_w + i].stt = !grid[j * nb_cell_w + i].stt;
+                                    if (grid[j * nb_cell_w + i].stt)
                                     {
                                         if (i < left_lim)
                                             left_lim = i;
@@ -2152,31 +2131,31 @@ WinMain(HINSTANCE Instance,
                                     bottom_lim0 = bottom_lim;
                                 }
                             }
-                            else if (in_zone(mouse_coords_ldown, play_butt_zone) && in_zone(mouse_coords_lup, play_butt_zone))
+                            else if (in_zone(mouse_coords_ldown, play_butt[0].scr_zone) && in_zone(mouse_coords_lup, play_butt[0].scr_zone))
                             {
                                 if (sim_on)
                                     prv_targ_stp = actual_step;
                                 sim_on = !sim_on;
                             }
-                            else if (in_zone(mouse_coords_ldown, go_butt_zone) && in_zone(mouse_coords_lup, go_butt_zone))
+                            else if (in_zone(mouse_coords_ldown, go_butt[0].scr_zone) && in_zone(mouse_coords_lup, go_butt[0].scr_zone))
                             {
                                 go_butt_clkd = true;
                             }
-                            else if (in_zone(mouse_coords_ldown, reinit_butt_zone) && in_zone(mouse_coords_lup, reinit_butt_zone))
+                            else if (in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone) && in_zone(mouse_coords_lup, reinit_butt[0].scr_zone))
                             {
                                 sim_on = false;
                                 reinit_grid();
                                 actual_step = 0;
                             }
-                            else if (in_zone(mouse_coords_ldown, get_im_zone(next_butt)) && in_zone(mouse_coords_lup, get_im_zone(next_butt)))
+                            else if (in_zone(mouse_coords_ldown, next_butt[0].scr_zone) && in_zone(mouse_coords_lup, next_butt[0].scr_zone))
                             {
                                 target_step = actual_step + 1;
                                 sim_on = true;
                                 step_dur = 0;
                             }
-                            else if ((in_zone(mouse_coords_ldown, get_im_zone(hide)) && in_zone(mouse_coords_lup, get_im_zone(hide)) && show_map) ||
-                                ((in_zone(mouse_coords_ldown, get_im_zone(anti_hide)) || in_zone(mouse_coords_ldown, sh_hide_zone)) &&
-                                    (in_zone(mouse_coords_lup, get_im_zone(anti_hide)) || in_zone(mouse_coords_lup, sh_hide_zone)) && !show_map))
+                            else if ((in_zone(mouse_coords_ldown, hide.scr_zone) && in_zone(mouse_coords_lup, hide.scr_zone) && show_map) ||
+                                     ((in_zone(mouse_coords_ldown, anti_hide.scr_zone) || in_zone(mouse_coords_ldown, sh_hide_zone)) &&
+                                     (in_zone(mouse_coords_lup, anti_hide.scr_zone) || in_zone(mouse_coords_lup, sh_hide_zone)) && !show_map))
                             {
                                 show_map = !show_map;
                             }
@@ -2199,76 +2178,67 @@ WinMain(HINSTANCE Instance,
                     if (target_step == -1)
                     {
                         // handling zoom smoothness
-                        if (bmp_w1 != bmp_w1_targ || bmp_h1 != bmp_h1_targ)
+                        if (bmp_zone.w != bmp_zone_targ.w || bmp_zone.h != bmp_zone_targ.h)
                         {
                             int zoom_sign = zoom_in ? -1 : 1;
-                            bmp_w1 += zoom_sign * zoom_speed * loop_time;
-                            bmp_h1 = (bmp_w1 / bmp_w) * bmp_h;
+                            bmp_zone.w += zoom_sign * zoom_speed * loop_time;
+                            bmp_zone.h = (bmp_zone.w / screen_zone.w) * screen_zone.h;
 
-                            bmp_pos.x += -zoom_sign * pos_zpeed_x * loop_time;
-                            bmp_pos.y += -zoom_sign * pos_zpeed_y * loop_time;
+                            bmp_zone.x += -zoom_sign * pos_zpeed_x * loop_time;
+                            bmp_zone.y += -zoom_sign * pos_zpeed_y * loop_time;
                             if (zoom_in)
                             {
-                                if (bmp_w1 < bmp_w1_targ)
+                                if (bmp_zone.w < bmp_zone_targ.w)
                                 {
-                                    bmp_w1 = bmp_w1_targ;
-                                    bmp_pos.x = bmp_pos_targ.x;
+                                    bmp_zone.w = bmp_zone_targ.w;
+                                    bmp_zone.x = bmp_zone_targ.x;
                                     zooming = false;
                                 }
-                                if (bmp_h1 < bmp_h1_targ)
+                                if (bmp_zone.h < bmp_zone_targ.h)
                                 {
-                                    bmp_h1 = bmp_h1_targ;
-                                    bmp_pos.y = bmp_pos_targ.y;
+                                    bmp_zone.h = bmp_zone_targ.h;
+                                    bmp_zone.y = bmp_zone_targ.y;
                                     zooming = false;
                                 }
                             }
                             else
                             {
-                                if (bmp_w1 > bmp_w1_targ)
+                                if (bmp_zone.w > bmp_zone_targ.w)
                                 {
-                                    bmp_w1 = bmp_w1_targ;
-                                    bmp_pos.x = bmp_pos_targ.x;
+                                    bmp_zone.w = bmp_zone_targ.w;
+                                    bmp_zone.x = bmp_zone_targ.x;
                                     zooming = false;
 
                                 }
-                                if (bmp_h1 > bmp_h1_targ)
+                                if (bmp_zone.h > bmp_zone_targ.h)
                                 {
-                                    bmp_h1 = bmp_h1_targ;
-                                    bmp_pos.y = bmp_pos_targ.y;
+                                    bmp_zone.h = bmp_zone_targ.h;
+                                    bmp_zone.y = bmp_zone_targ.y;
                                     zooming = false;
                                 }
                             }
-                            zoom_ratio_x = double(bmp_w) / bmp_w1;
-                            zoom_ratio_y = double(bmp_h) / bmp_h1;
-
-                            if (bmp_pos.x < 0)
-                                bmp_pos.x = 0;
-                            if (bmp_pos.x + bmp_w1 > nb_box_w * box_w)
-                                bmp_pos.x = nb_box_w * box_w - bmp_w1;
-                            if (bmp_pos.y < 0)
-                                bmp_pos.y = 0;
-                            if (bmp_pos.y + bmp_h1 > nb_box_h * box_h)
-                                bmp_pos.y = nb_box_h * box_h - bmp_h1;
-
+                            zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
+                            zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
+                            make_inside(bmp_zone, vbmp_zone);
                         }
 
                         // handling simulation velocity setting
                         if (int_bar_slctd)
                         {
-                            intens_slct.pos.x = mouse_coords.x - intens_slct.w / 2;
-                            if (mouse_coords.x >= intens_bar.pos.x + intens_bar.w)
-                                intens_slct.pos.x = intens_bar.pos.x + intens_bar.w - intens_slct.w / 2;
-                            if (mouse_coords.x <= intens_bar.pos.x)
-                                intens_slct.pos.x = intens_bar.pos.x - intens_slct.w / 2;
+                            intens_slct.scr_zone.x = mouse_coords.x - intens_slct.scr_zone.w / 2;
+                            if (mouse_coords.x >= intens_bar.scr_zone.x + intens_bar.scr_zone.w)
+                                intens_slct.scr_zone.x = intens_bar.scr_zone.x + intens_bar.scr_zone.w - intens_slct.scr_zone.w / 2;
+                            if (mouse_coords.x <= intens_bar.scr_zone.x)
+                                intens_slct.scr_zone.x = intens_bar.scr_zone.x - intens_slct.scr_zone.w / 2;
                         }
-                        sim_freq = double(5 * (intens_slct.pos.x + intens_slct.w / 2 - intens_bar.pos.x)) / intens_bar.w + 1;
+                        sim_freq = double(5 * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x)) / intens_bar.scr_zone.w + 1;
                         step_dur = 1.0 / sim_freq;
 
                         // change region_pos after zoom and dragging handled
                         if (!mov_region)
                         {
-                            bmp_region_zone.x = bmp_pos.x * map_box_w / box_w - map_pos.x + region_slct_zone.x;
-                            bmp_region_zone.y = bmp_pos.y * map_box_w / box_w - map_pos.y + region_slct_zone.y;
+                            bmp_region_zone.x = bmp_zone.x * map_cell_w / cell_w - map_pos.x + region_slct_zone.x;
+                            bmp_region_zone.y = bmp_zone.y * map_cell_w / cell_w - map_pos.y + region_slct_zone.y;
                             if (bmp_region_zone.x <= region_slct_zone.x)
                             {
                                 if (map_pos.x > 0)
@@ -2277,8 +2247,8 @@ WinMain(HINSTANCE Instance,
                             }
                             if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
                             {
-                                if (map_pos.x + map_w < nb_box_w * map_box_w)
-                                    map_pos.x = min(nb_box_w * map_box_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                                if (map_pos.x + map_w < nb_cell_w * map_cell_w)
+                                    map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
                                 bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
                             }
                             if (bmp_region_zone.y <= region_slct_zone.y)
@@ -2289,54 +2259,53 @@ WinMain(HINSTANCE Instance,
                             }
                             if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
                             {
-                                if (map_pos.y + map_h < nb_box_h * map_box_w)
-                                    map_pos.y = min(nb_box_h * map_box_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                                if (map_pos.y + map_h < nb_cell_h * map_cell_w)
+                                    map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
                                 bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
                             }
-                            if(bmp_pos.x == nb_box_w * box_w - bmp_w1 && int(bmp_w1)%box_w != 0)
-                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w + 1;
+                            if(bmp_zone.x == nb_cell_w * cell_w - bmp_zone.w && int(bmp_zone.w)%cell_w != 0)
+                                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w + 1;
                             else 
-                                bmp_region_zone.w = bmp_w1 * map_box_w / box_w;
-                            if (bmp_pos.y == nb_box_h * box_h - bmp_h1 && int(bmp_h1) % box_h != 0)
-                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h + 1;
+                                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w;
+                            if (bmp_zone.y == nb_cell_h * cell_h - bmp_zone.h && int(bmp_zone.h) % cell_h != 0)
+                                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h + 1;
                             else
-                                bmp_region_zone.h = bmp_h1 * map_box_w / box_h;
+                                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h;
                         }
 
                         // grid inserting 
                         insert_bgnd_color(black);
                         int i = 1;
                         int line_x = 0;
-                        while (line_x < bmp_w)
+                        while (line_x < screen_zone.w)
                         {
-                            line_x = ((int(bmp_pos.x / box_w) + i) * box_w - bmp_pos.x) * zoom_ratio_x;
-                            insert_color_to_zone(white, { line_x, 0, 2, bmp_h });
+                            line_x = ((int(bmp_zone.x / cell_w) + i) * cell_w - bmp_zone.x) * zoom_ratio_x;
+                            insert_color_to_zone(white, { line_x, 0, 2, screen_zone.h });
                             i++;
                         }
                         i = 1;
                         int line_y = 0;
-                        while (line_y < bmp_h)
+                        while (line_y < screen_zone.h)
                         {
-                            line_y = ((int(bmp_pos.y / box_w) + i) * box_w - bmp_pos.y) * zoom_ratio_y;
-                            insert_color_to_zone(white, { 0,line_y, bmp_w, 2 });
+                            line_y = ((int(bmp_zone.y / cell_w) + i) * cell_w - bmp_zone.y) * zoom_ratio_y;
+                            insert_color_to_zone(white, { 0,line_y, screen_zone.w, 2 });
                             i++;
                         }
 
                         // updating the state of bitmap
-                        for (int i = int(bmp_pos.x / box_w); i < int((bmp_pos.x + bmp_w1) / box_w) + 1; i++)
+                        for (int i = int(bmp_zone.x / cell_w); i < int((bmp_zone.x + bmp_zone.w) / cell_w) + 1; i++)
                         {
-                            for (int j = int(bmp_pos.y / box_h); j < int((bmp_pos.y + bmp_h1) / box_h) + 1; j++)
+                            for (int j = int(bmp_zone.y / cell_h); j < int((bmp_zone.y + bmp_zone.h) / cell_h) + 1; j++)
                             {
-                                recta zone = { i * box_w, j * box_h , box_w, box_h };
-                                recta bmp_zone = { int(bmp_pos.x), int(bmp_pos.y), bmp_w1, bmp_h1 };
+                                recta zone = { i * cell_w, j * cell_h , cell_w, cell_h };
 
-                                int scr_box_x = (zone.x - bmp_pos.x) * zoom_ratio_x;
-                                int scr_box_y = (zone.y - bmp_pos.y) * zoom_ratio_y;
-                                int scr_box_w = int((zone.x + box_w - bmp_pos.x) * zoom_ratio_x) - scr_box_x - 2;
-                                int scr_box_h = int((zone.y + box_h - bmp_pos.y) * zoom_ratio_y) - scr_box_y - 2;
+                                int scr_cell_x = (zone.x - bmp_zone.x) * zoom_ratio_x;
+                                int scr_cell_y = (zone.y - bmp_zone.y) * zoom_ratio_y;
+                                int scr_cell_w = int((zone.x + cell_w - bmp_zone.x) * zoom_ratio_x) - scr_cell_x - 2;
+                                int scr_cell_h = int((zone.y + cell_h - bmp_zone.y) * zoom_ratio_y) - scr_cell_y - 2;
 
-                                recta in_bmp_zone = { scr_box_x + 2, scr_box_y + 2, scr_box_w,  scr_box_h };
-                                if (grid[j * nb_box_w + i].stt)
+                                recta in_bmp_zone = { scr_cell_x + 2, scr_cell_y + 2, scr_cell_w,  scr_cell_h };
+                                if (grid[j * nb_cell_w + i].stt)
                                     insert_color_to_zone(light, in_bmp_zone);
                                 else
                                     insert_color_to_zone(black, in_bmp_zone);
@@ -2347,13 +2316,12 @@ WinMain(HINSTANCE Instance,
 
                     if (gif_saving)
                     {
-                        if (my_mouse.l_clk && in_zone(mouse_coords_ldown, reinit_butt_zone) && in_zone(mouse_coords_lup, reinit_butt_zone))
+                        if (my_mouse.l_clk && in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone) && in_zone(mouse_coords_lup, reinit_butt[0].scr_zone))
                         {
                             sim_on = false;
                             reinit_grid();
                             actual_step = 0;
                         }
-
                         if (!gif_rg_slctd)
                         {
                             if (gif_slct_mode)
@@ -2362,8 +2330,6 @@ WinMain(HINSTANCE Instance,
                                 int y = mouse_coords.y;
                                 int x0 = mouse_coords_rdown.x;
                                 int y0 = mouse_coords_rdown.y;
-
-
                                 int mi_x = min(x, x0), mi_y = min(y, y0), ma_x = max(x, x0), ma_y = max(y, y0);
                                 insert_recta({ mi_x, mi_y, ma_x - mi_x + 1, ma_y - mi_y + 1 }, l_blue, 2);
                             }
@@ -2399,19 +2365,18 @@ WinMain(HINSTANCE Instance,
                     {
                         insert_im(anti_hide);
                         int pw = 60;
-                        recta panel_zone = { anti_hide.pos.x - pw, anti_hide.pos.y, pw, anti_hide.h };
+                        recta panel_zone = { anti_hide.scr_zone.x - pw, anti_hide.scr_zone.y, pw, anti_hide.h };
                         insert_color_to_zone(ld_blue, panel_zone);
                         insert_text_to_zone("map", { panel_zone.x + 3, panel_zone.y + 3, panel_zone.w - 6, panel_zone.h - 6 }, true, black);
                     }
 
                     // menu zone inserting 
                     insert_color_to_zone(ll_grey, menu_zone);
-                    insert_out_recta({ menu_zone.x + 2, menu_zone.y + 2, menu_zone.w - 4, menu_zone.h - 4 }, ld_blue, 4);
-                    insert_out_recta({ menu_zone.x + 4, menu_zone.y + 4, menu_zone.w - 8, menu_zone.h - 8 }, grey, 2);
+                    insert_out_recta({ menu_zone.x, menu_zone.y, menu_zone.w, menu_zone.h}, ld_blue, 4);
+                    insert_out_recta({ menu_zone.x , menu_zone.y , menu_zone.w , menu_zone.h }, grey, 2);
 
-                    insert_im(intens_bar);
+                    instrch_from_im(intens_bar, {0,0,intens_bar.w, intens_bar.h}, intens_bar.scr_zone);
                     insert_out_recta(step_slct_zone, grey, 3);
-                    insert_im(go_butt);
                     insert_text_to_zone("go to step", go_to_stp_zone, true, grey);
                     insert_text_to_zone("simulation velocity", sim_vel_zone, true, grey);
                     insert_save_butt();
@@ -2421,45 +2386,45 @@ WinMain(HINSTANCE Instance,
 
                     if (!sim_on || target_step != -1)
                         if (!plpau_down)
-                            if (in_zone(mouse_coords, play_butt_zone))
-                                insert_im(play_butt_1);
-                            else
-                                insert_im(play_butt_0);
+                            if (in_zone(mouse_coords, play_butt[0].scr_zone))
+                                instrch_from_im(play_butt[1], {0,0,play_butt[0].w, play_butt[0].h}, play_butt[0].scr_zone);
+                            else                                                                    
+                                instrch_from_im(play_butt[0], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
                         else
-                            insert_im(play_butt_2);
+                            instrch_from_im(play_butt[2], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
                     else
                         if (!plpau_down)
-                            if (in_zone(mouse_coords, play_butt_zone))
-                                insert_im(pause_butt_1);
+                            if (in_zone(mouse_coords, play_butt[0].scr_zone))
+                                instrch_from_im(pause_butt[1], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
                             else
-                                insert_im(pause_butt_0);
+                                instrch_from_im(pause_butt[0], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
                         else
-                            insert_im(pause_butt_2);
+                            instrch_from_im(pause_butt[2], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
 
                     if (!reinit_down)
-                        if (in_zone(mouse_coords, reinit_butt_zone))
-                            insert_im(reinit_butt_1);
+                        if (in_zone(mouse_coords, reinit_butt[0].scr_zone))
+                            instrch_from_im(reinit_butt[1], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
                         else
-                            insert_im(reinit_butt);
+                            instrch_from_im(reinit_butt[0], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
                     else
-                        insert_im(reinit_butt_2);
+                        instrch_from_im(reinit_butt[2], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
                     if (!next_down)
-                        if (in_zone(mouse_coords, get_im_zone(next_butt)))
-                            insert_im(next_butt_1);
+                        if (in_zone(mouse_coords, next_butt[0].scr_zone))
+                            instrch_from_im(next_butt[1], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
                         else
-                            insert_im(next_butt);
+                            instrch_from_im(next_butt[0], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
                     else
-                        insert_im(next_butt_2);
+                        instrch_from_im(next_butt[2], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
                     if (!go_butt_down)
-                        if (in_zone(mouse_coords, go_butt_zone))
-                            insert_im(go_butt_1);
+                        if (in_zone(mouse_coords, go_butt[0].scr_zone))
+                            instrch_from_im(go_butt[1], {0,0,go_butt[0].w, go_butt[0].h}, go_butt[0].scr_zone);
                         else
-                            insert_im(go_butt);
+                            instrch_from_im(go_butt[0], { 0,0,go_butt[0].w, go_butt[0].h }, go_butt[0].scr_zone);
                     else
-                        insert_im(go_butt_2);
+                        instrch_from_im(go_butt[2], { 0,0,go_butt[0].w, go_butt[0].h }, go_butt[0].scr_zone);
 
-                    insert_color_to_zone(slct_color, { intens_bar.pos.x + 2, intens_bar.pos.y + 1, intens_slct.pos.x - intens_bar.pos.x + 2, 4 });
-                    insert_im(intens_slct);
+                    insert_color_to_zone(slct_color, { intens_bar.scr_zone.x + 2, intens_bar.scr_zone.y + 1, intens_slct.scr_zone.x - intens_bar.scr_zone.x + 2, 4 });
+                    instrch_from_im(intens_slct, {0,0,intens_slct.w, intens_slct.h}, intens_slct.scr_zone);
                     insert_sim_vel();
                     if (my_mouse.l_down && !gif_saving)
                     {
@@ -2509,63 +2474,35 @@ WinMain(HINSTANCE Instance,
                     // handle selected elements in step setting zone 
                     if (slct_mode)
                     {
-                        if (mouse_coords.x - initial_slct_x >= 0)
-                        {
-                            int first_char_idx = (initial_slct_x - initial_curs_pos.x) / num_width;
-                            if (mouse_coords.x - initial_curs_pos.x <= num_crctrs * num_width)
-                                slctd_nbr = (mouse_coords.x - initial_slct_x + num_width / 2) / num_width;
-                            else
-                                slctd_nbr = (initial_curs_pos.x + num_crctrs * num_width - initial_slct_x + num_width / 2) / num_width;
+                        mouse_slct_idx = (mouse_coords.x - initial_curs_x + num_width / 2) / num_width;
+                        mouse_slct_idx = max(0, mouse_slct_idx);
+                        mouse_slct_idx = min(step_str.size(), mouse_slct_idx);
+                        my_cursor.scr_zone.x = initial_curs_x + mouse_slct_idx * num_width;
 
-                            for (int i = 0; i < slctd_nbr; i++)
-                                slctd_nums[i] = first_char_idx + i;
-                        }
-                        else
-                        {
-                            int first_char_idx = (initial_slct_x - initial_curs_pos.x) / num_width - 1;
-                            if (mouse_coords.x >= initial_curs_pos.x)
-                                slctd_nbr = (initial_slct_x - mouse_coords.x + num_width / 2) / num_width;
-                            else
-                                slctd_nbr = (initial_slct_x - initial_curs_pos.x + num_width / 2) / num_width;
-
-                            for (int i = 0; i < slctd_nbr; i++)
-                                slctd_nums[slctd_nbr - i - 1] = first_char_idx - i;
-
-                        }
+                        char msgbf[100];
+                        sprintf(msgbf, "i = %d, m = %d\n", initial_slct_idx, mouse_slct_idx);
+                        OutputDebugStringA(msgbf);
                     }
-                    for (int i = 0; i < slctd_nbr; i++)
+                    if (mouse_slct_idx != initial_slct_idx)
                     {
-                        recta num_zone = { initial_curs_pos.x + slctd_nums[i] * num_width, initial_curs_pos.y, num_width, my_cursor.h};
-                        insert_color_to_zone(slct_color, num_zone);
+                        int min_i = min(initial_slct_idx, mouse_slct_idx);
+                        int max_i = max(initial_slct_idx, mouse_slct_idx);
+                        recta slcted_zone = { initial_curs_x + min_i * num_width, my_cursor.scr_zone.y, (max_i - min_i) * num_width, my_cursor.scr_zone.h };
+                        insert_color_to_zone(slct_color, slcted_zone);
                     }
-
-                    // handle cursor position 
-                    if (my_mouse.l_down && in_zone(mouse_coords_ldown, step_slct_zone))
-                    {
-                        int block = (mouse_coords.x - initial_curs_pos.x + num_width / 2) / num_width;
-                        if (block <= 0)
-                            my_cursor.pos.x = initial_curs_pos.x;
-                        else if (block <= num_crctrs)
-                            my_cursor.pos.x = initial_curs_pos.x + block * num_width;
-                        else
-                            my_cursor.pos.x = initial_curs_pos.x + num_crctrs * num_width;
-                    }
-
                     // blit set step
-                    static point pos = { initial_curs_pos.x, initial_curs_pos.y + (my_cursor.h - num_height) / 2 };
-                    for (int i = 0; i < num_crctrs; i++)
+                    point pos = { initial_curs_x, my_cursor.scr_zone.y + (my_cursor.scr_zone.h - num_height) / 2 };
+                    for (int i = 0; i < step_str.size(); i++)
                     {
                         insert_num(step_str[i], { pos.x, pos.y, num_width, num_height });
                         pos.x += num_width;
-
                     }
-                    pos = { initial_curs_pos.x, initial_curs_pos.y + (my_cursor.h - num_height) / 2 };
-
+                    
                     if (show_cursor)
                     {
                         if (cursor_timer <= 0.8)
                         {
-                            insert_im(my_cursor);
+                            instrch_from_im(my_cursor, {0,0,my_cursor.w, my_cursor.h}, my_cursor.scr_zone);
                         }
                         if (cursor_timer >= 1.6)
                             cursor_timer = 0;
@@ -2624,16 +2561,8 @@ WinMain(HINSTANCE Instance,
                                     }
                                 }
                             }
-
-                            if (scrler_zone.y < scrl_zone.y)
-                                scrler_zone.y = scrl_zone.y;
-                            if (scrler_zone.y + scrler_zone.h > scrl_zone.y + scrl_zone.h)
-                                scrler_zone.y = scrl_zone.y + scrl_zone.h - scrler_zone.h;
-
-                            if (f_href > draw_f_zone.y)
-                                f_href = draw_f_zone.y;
-                            if (f_href < draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h)
-                                f_href = draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h;
+                            make_inside(scrler_zone.y, scrl_zone.y, scrl_zone.y + scrl_zone.h - scrler_zone.h);
+                            make_inside(f_href, draw_f_zone.y + draw_f_zone.h - (nb_files + 2) * file_h, draw_f_zone.y);
                         }
                         else if (in_zone(mouse_coords_ldown, cancel_butt_zone) && in_zone(mouse_coords, cancel_butt_zone))
                         {
@@ -2697,14 +2626,10 @@ WinMain(HINSTANCE Instance,
     
                         insert_out_recta(scrl_up_zone, black, 2);
                         insert_out_recta(scrl_down_zone, black, 2);
-                        if (in_zone(mouse_coords, scrl_up_zone))
-                            instrch_from_im(scrl_up1, { 0,0,scrl_up1.w, scrl_up1.h }, scrl_up_zone);
-                        else
-                            instrch_from_im(scrl_up, { 0,0,scrl_up.w, scrl_up.h }, scrl_up_zone);
-                        if (in_zone(mouse_coords, scrl_down_zone))
-                            instrch_from_im(scrl_down1, { 0,0,scrl_down1.w, scrl_down1.h }, scrl_down_zone);
-                        else
-                            instrch_from_im(scrl_down, { 0,0,scrl_down.w, scrl_down.h }, scrl_down_zone);
+                        int up_ind = in_zone(mouse_coords, scrl_up_zone) ? 1 : 0;
+                        instrch_from_im(scrl_up[up_ind], { 0,0,scrl_up[up_ind].w, scrl_up[up_ind].h }, scrl_up_zone);
+                        int down_ind = in_zone(mouse_coords, scrl_down_zone) ? 1 : 0;
+                        instrch_from_im(scrl_down[down_ind], { 0,0,scrl_down[down_ind].w, scrl_down[down_ind].h }, scrl_down_zone);
                     }
 
                 }
@@ -2718,8 +2643,6 @@ WinMain(HINSTANCE Instance,
                 }
                 my_mouse.l_clk = false;
                 go_butt_clkd = false;
-                save_clkd = false;
-                open_clkd = false;
                 
                 double frame_time = frame_dur;
                 if (frame_calc_start)
