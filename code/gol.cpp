@@ -273,6 +273,9 @@ char anti_hide_fn[]   = "..\\images\\anti_hide.png";
 char folder_icon_fn[] = "..\\images\\folder.png";
 char cascadia_font[] = "Cascadia.ttf";
 
+//window handle 
+HWND main_wnd;
+
 // time calculation vars ----------------------------------
 timer app_timer;
 timer cursor_timer;
@@ -329,7 +332,6 @@ int bottom_lim0 = bottom_lim;
 std::vector<point> grid_init_stt;
 
 // menu zone params ----------------------------------
-bool go_butt_clkd = false;
 bool go_butt_down = false;
 bool plpau_down = false;
 bool reinit_down = false;
@@ -432,6 +434,7 @@ recta mul_sign_zone = { 160, 32, 10, 10 };
 recta dot_zone = { src_num_width * 10 , 0, 4, 2 };
 
 // freetype text rendering params 
+FT_Library ft;
 FT_Face cascadia_face;
 hinted_face face_chars[200]; 
 
@@ -1743,7 +1746,6 @@ wnd_callback(HWND wnd,
         {
             mouse_coords_lup.x = GET_X_LPARAM(lp);
             mouse_coords_lup.y = GET_Y_LPARAM(lp);
-            my_mouse.l_clk = true;
             my_mouse.l_down = false;
             int_bar_slctd = false;
             slct_mode = false;
@@ -1795,7 +1797,18 @@ wnd_callback(HWND wnd,
                 }
                 else if (in_zone(mouse_coords_ldown, go_butt_zone) && in_zone(mouse_coords_lup, go_butt_zone))
                 {
-                    go_butt_clkd = true;
+                    target_step = get_step_int();
+                    if(target_step != actual_step)
+                    {
+                        go_mode = true;
+                        sim_on = true;
+                        step_dur = 0;
+                        if (target_step < prv_targ_stp || target_step < actual_step)
+                        {
+                            reinit_grid();
+                            actual_step = 0;
+                        }
+                    }
                 }
                 else if (in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone) && in_zone(mouse_coords_lup, reinit_butt[0].scr_zone))
                 {
@@ -2642,14 +2655,658 @@ void collect_dlg::fill_params()
     ok_zone.y = zone.y + zone.h -  2 * ok_zone.h;
 }
 
-int CALLBACK
-WinMain(HINSTANCE Instance,
-    HINSTANCE PrevInstance,
-    LPSTR CommandLine,
-    int ShowCode)
+void update_back_buffer()
 {
-    screen_zone.w = 0.8 * GetSystemMetrics(SM_CXSCREEN);
-    screen_zone.h = 0.8 * GetSystemMetrics(SM_CYSCREEN);
+    if (normal_mode || gif_saving)
+    {
+        // grid drawing 
+        draw_bgnd_color(black);
+        int i = 1;
+        int line_x = 0;
+        while (line_x < screen_zone.w)
+        {
+            line_x = ((int(bmp_zone.x / cell_w) + i) * cell_w - bmp_zone.x) * zoom_ratio_x;
+            draw_color_to_zone(white, { line_x, 0, 2, screen_zone.h });
+            i++;
+        }
+        i = 1;
+        int line_y = 0;
+        while (line_y < screen_zone.h)
+        {
+            line_y = ((int(bmp_zone.y / cell_w) + i) * cell_w - bmp_zone.y) * zoom_ratio_y;
+            draw_color_to_zone(white, { 0,line_y, screen_zone.w, 2 });
+            i++;
+        }
+
+        // updating the state of bitmap
+        for (int i = int(bmp_zone.x / cell_w); i < int((bmp_zone.x + bmp_zone.w) / cell_w) + 1; i++)
+        {
+            for (int j = int(bmp_zone.y / cell_h); j < int((bmp_zone.y + bmp_zone.h) / cell_h) + 1; j++)
+            {
+                recta zone = { i * cell_w, j * cell_h , cell_w, cell_h };
+
+                int scr_cell_x = (zone.x - bmp_zone.x) * zoom_ratio_x;
+                int scr_cell_y = (zone.y - bmp_zone.y) * zoom_ratio_y;
+                int scr_cell_w = int((zone.x + cell_w - bmp_zone.x) * zoom_ratio_x) - scr_cell_x - 2;
+                int scr_cell_h = int((zone.y + cell_h - bmp_zone.y) * zoom_ratio_y) - scr_cell_y - 2;
+
+                recta in_bmp_zone = { scr_cell_x + 2, scr_cell_y + 2, scr_cell_w,  scr_cell_h };
+                if (grid[j * nb_cell_w + i])
+                    draw_color_to_zone(light, in_bmp_zone);
+            }
+        }
+
+        // menu zone drawing 
+        draw_color_to_zone(ll_grey, menu_zone);
+        draw_out_recta({ menu_zone.x, menu_zone.y, menu_zone.w, menu_zone.h }, ld_blue, 4);
+        draw_out_recta({ menu_zone.x , menu_zone.y , menu_zone.w , menu_zone.h }, grey, 2);
+
+        draw_out_recta(intens_bar.scr_zone, black, 2);
+        draw_out_recta(step_edit.zone, grey, 3);
+        //draw_text_to_zone(, , true, grey);
+        //draw_text_to_zone("simulation velocity", sim_vel_zone, true, grey);
+        draw_text_cntrd_fit(cascadia_face, L"Go To Step", go_to_stp_zone, { 0, -go_to_stp_zone.h, 0, 0 });
+        draw_text_cntrd_fit(cascadia_face, L"Simulation Velocity", sim_vel_zone, { 0, -sim_vel_zone.h, 0, 0 });
+        draw_butt(save_butt_zone, L"SAVE", save_butt_zone.w / 16);
+        draw_butt(open_butt_zone, L"OPEN", open_butt_zone.w / 16);
+        draw_butt(clear_butt_zone, L"CLEAR", clear_butt_zone.w / 16);
+        draw_butt(go_butt_zone, L"GO", go_butt_zone.w * 7 / 24);
+
+        draw_actual_step();
+
+        // map drawing
+        if (show_map)
+        {
+            draw_region_slct();
+            draw_im(hide);
+        }
+        else
+        {
+            draw_im(anti_hide);
+            int pw = 60;
+            recta panel_zone = { anti_hide.scr_zone.x - pw, anti_hide.scr_zone.y, pw, anti_hide.h };
+            draw_color_to_zone(ld_blue, panel_zone);
+            draw_text_to_zone(L"map", { panel_zone.x + 3, panel_zone.y + 3, panel_zone.w - 6, panel_zone.h - 6 }, true, black);
+        }
+
+        // play, pause, reinit, go, next buttons
+        if (sim_on || go_mode)
+        {
+            if (!plpau_down)
+            {
+                if (in_zone(mouse_coords, pause_butt[0].scr_zone))
+                    instrch_from_im(pause_butt[1], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
+                else
+                    instrch_from_im(pause_butt[0], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
+            }
+            else
+                instrch_from_im(pause_butt[2], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
+        }
+        else
+        {
+            if (!plpau_down)
+            {
+                if (in_zone(mouse_coords, play_butt[0].scr_zone))
+                    instrch_from_im(play_butt[1], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
+                else
+                    instrch_from_im(play_butt[0], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
+            }
+            else
+                instrch_from_im(play_butt[2], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
+        }
+
+        if (!reinit_down)
+            if (in_zone(mouse_coords, reinit_butt[0].scr_zone))
+                instrch_from_im(reinit_butt[1], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
+            else
+                instrch_from_im(reinit_butt[0], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
+        else
+            instrch_from_im(reinit_butt[2], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
+        if (!next_down)
+            if (in_zone(mouse_coords, next_butt[0].scr_zone))
+                instrch_from_im(next_butt[1], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
+            else
+                instrch_from_im(next_butt[0], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
+        else
+            instrch_from_im(next_butt[2], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
+
+        draw_color_to_zone(slct_color, { intens_bar.scr_zone.x, intens_bar.scr_zone.y, intens_slct.scr_zone.x - intens_bar.scr_zone.x , intens_bar.scr_zone.h });
+        instrch_from_im(intens_slct, { 0,0,intens_slct.w, intens_slct.h }, intens_slct.scr_zone);
+        draw_sim_vel();
+        if (normal_mode)
+        {
+            step_edit.draw();
+        }
+        if (gif_saving)
+        {
+            if (gif_slct_mode)
+            {
+                int x = mouse_coords.x;
+                int y = mouse_coords.y;
+                int x0 = mouse_coords_rdown.x;
+                int y0 = mouse_coords_rdown.y;
+                int mi_x = min(x, x0), mi_y = min(y, y0), ma_x = max(x, x0), ma_y = max(y, y0);
+                draw_recta({ mi_x, mi_y, ma_x - mi_x + 1, ma_y - mi_y + 1 }, l_blue, 2);
+            }
+            else if (gif_params_collect)
+            {
+                draw_diag_mesh(grey, 5);
+                gif_params_dlg.draw();
+                for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
+                {
+                    gif_params_dlg.txt_edits[i].draw();
+                }
+            }
+        }
+    }
+    else if (open_file)
+    {
+        // draw bakgnd colors and outlines
+        draw_color_to_zone(ll_grey, opnf_dlg.zone);
+        draw_out_recta(opnf_dlg.zone, l_grey, 4);
+        draw_out_recta(opnf_dlg.exp_zone, black, 2);
+
+        // draw open cancel buttons
+        draw_butt(opnf_dlg.open_zone, L"OPEN", opnf_dlg.open_zone.w / 5);
+        draw_butt(opnf_dlg.cancel_zone, L"CANCEL", opnf_dlg.cancel_zone.w / 10);
+        if (my_mouse.l_down)
+        {
+            if (in_zone(mouse_coords_ldown, opnf_dlg.cancel_zone) && in_zone(mouse_coords, opnf_dlg.cancel_zone))
+            {
+                draw_out_recta(opnf_dlg.cancel_zone, black, 4);
+            }
+            if (in_zone(mouse_coords_ldown, opnf_dlg.open_zone) && in_zone(mouse_coords, opnf_dlg.open_zone))
+            {
+                draw_out_recta(opnf_dlg.open_zone, black, 4);
+            }
+        }
+
+        // hovered and selected file hilighting
+        if (in_zone(mouse_coords, opnf_dlg.exp_zone))
+        {
+            int idx_hilit = ((opnf_dlg.exp_zone.y - opnf_dlg.fhref) + (mouse_coords.y - opnf_dlg.exp_zone.y)) / opnf_dlg.file_h;
+            if (idx_hilit < opnf_dlg.nb_files)
+                draw_color_to_zone(lg_blue, { opnf_dlg.exp_zone.x, opnf_dlg.fhref + idx_hilit * opnf_dlg.file_h, opnf_dlg.exp_zone.w, opnf_dlg.file_h }, opnf_dlg.exp_zone);
+        }
+        if (opnf_dlg.fslctd_idx != -1)
+        {
+            draw_color_to_zone(ldg_blue, { opnf_dlg.exp_zone.x, opnf_dlg.fhref + opnf_dlg.fslctd_idx * opnf_dlg.file_h, opnf_dlg.exp_zone.w, opnf_dlg.file_h }, opnf_dlg.exp_zone);
+        }
+
+        // draw file names
+        int icon_w = opnf_dlg.file_h;
+        for (int i = (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.file_h; i < opnf_dlg.nb_files; i++)
+        {
+            int row_y = opnf_dlg.fhref + i * opnf_dlg.file_h;
+            if (row_y > opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h)
+                break;
+            if (opnf_dlg.files_q[i].second)
+                instrch_from_im(folder_icon, { 0,0,folder_icon.w, folder_icon.h }, { opnf_dlg.exp_zone.x, row_y, icon_w, opnf_dlg.file_h }, false, black, opnf_dlg.exp_zone);
+            draw_text_ft(cascadia_face, opnf_dlg.files_q[i].first, { opnf_dlg.exp_zone.x + icon_w, row_y, opnf_dlg.exp_zone.w - icon_w, opnf_dlg.file_h }, opnf_dlg.exp_zone, { 0, opnf_dlg.file_h * 11 / 36, 0, opnf_dlg.file_h * 11 / 36 });
+        }
+
+        // add scroll bar when necessary
+        if (opnf_dlg.scrl_exist)
+        {
+            draw_out_recta(opnf_dlg.scrl.zone, black, 2);
+            if (opnf_dlg.scrl.drag)
+                draw_color_to_zone(grey, opnf_dlg.scrl.scrler_zone);
+            else
+                draw_color_to_zone(l_grey, opnf_dlg.scrl.scrler_zone);
+
+            draw_out_recta(opnf_dlg.scrl.up_zone, black, 2);
+            draw_out_recta(opnf_dlg.scrl.down_zone, black, 2);
+            int up_ind = in_zone(mouse_coords, opnf_dlg.scrl.up_zone) ? 1 : 0;
+            instrch_from_im(scrl_up[up_ind], { 0,0,scrl_up[up_ind].w, scrl_up[up_ind].h }, opnf_dlg.scrl.up_zone);
+            int down_ind = in_zone(mouse_coords, opnf_dlg.scrl.down_zone) ? 1 : 0;
+            instrch_from_im(scrl_down[down_ind], { 0,0,scrl_down[down_ind].w, scrl_down[down_ind].h }, opnf_dlg.scrl.down_zone);
+        }
+    }
+    else if (f_error_dlg)
+    {
+        opn_wrong_f.draw();
+    }
+    else if (save_file)
+    {
+        // draw bakgnd colors and outlines
+        draw_color_to_zone(ll_grey, savf_dlg.zone);
+        draw_out_recta(savf_dlg.zone, l_grey, 4);
+        draw_out_recta(savf_dlg.exp_zone, black, 2);
+        draw_out_recta(savf_dlg.txt_edit.zone, black, 2);
+        // draw open cancel buttons
+        draw_butt(savf_dlg.open_zone, L"SAVE", savf_dlg.open_zone.w / 5);
+        draw_butt(savf_dlg.cancel_zone, L"CANCEL", savf_dlg.cancel_zone.w / 10);
+
+        // handling left mouse down
+        if (my_mouse.l_down)
+        {
+            if (in_zone(mouse_coords_ldown, savf_dlg.cancel_zone) && in_zone(mouse_coords, savf_dlg.cancel_zone))
+            {
+                draw_out_recta(savf_dlg.cancel_zone, black, 4);
+            }
+            if (in_zone(mouse_coords_ldown, savf_dlg.open_zone) && in_zone(mouse_coords, savf_dlg.open_zone))
+            {
+                draw_out_recta(savf_dlg.open_zone, black, 4);
+            }
+        }
+
+        // hovered and selected file hilighting
+        if (in_zone(mouse_coords, savf_dlg.exp_zone))
+        {
+            int idx_hilit = ((savf_dlg.exp_zone.y - savf_dlg.fhref) + (mouse_coords.y - savf_dlg.exp_zone.y)) / savf_dlg.file_h;
+            if (idx_hilit < savf_dlg.nb_files)
+                draw_color_to_zone(lg_blue, { savf_dlg.exp_zone.x, savf_dlg.fhref + idx_hilit * savf_dlg.file_h, savf_dlg.exp_zone.w, savf_dlg.file_h }, savf_dlg.exp_zone);
+        }
+        if (savf_dlg.fslctd_idx != -1)
+        {
+            draw_color_to_zone(ldg_blue, { savf_dlg.exp_zone.x, savf_dlg.fhref + savf_dlg.fslctd_idx * savf_dlg.file_h, savf_dlg.exp_zone.w, savf_dlg.file_h }, savf_dlg.exp_zone);
+        }
+
+        // draw file names
+        int icon_w = savf_dlg.file_h;
+        for (int i = (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.file_h; i < savf_dlg.nb_files; i++)
+        {
+            int row_y = savf_dlg.fhref + i * savf_dlg.file_h;
+            if (row_y > savf_dlg.exp_zone.y + savf_dlg.exp_zone.h)
+                break;
+            if (savf_dlg.files_q[i].second)
+                instrch_from_im(folder_icon, { 0,0,folder_icon.w, folder_icon.h }, { savf_dlg.exp_zone.x, row_y , icon_w, savf_dlg.file_h - savf_dlg.file_h * 17 / 80 }, false, black, savf_dlg.exp_zone);
+            draw_text_ft(cascadia_face, savf_dlg.files_q[i].first, { savf_dlg.exp_zone.x + icon_w, row_y, savf_dlg.exp_zone.w - icon_w, savf_dlg.file_h }, savf_dlg.exp_zone, { 0, savf_dlg.file_h * 17 / 80, 0, savf_dlg.file_h * 17 / 80 });
+        }
+
+        // add scroll bar when necessary
+        if (savf_dlg.scrl_exist)
+        {
+            draw_out_recta(savf_dlg.scrl.zone, black, 2);
+            if (savf_dlg.scrl.drag)
+                draw_color_to_zone(grey, savf_dlg.scrl.scrler_zone);
+            else
+                draw_color_to_zone(l_grey, savf_dlg.scrl.scrler_zone);
+
+            draw_out_recta(savf_dlg.scrl.up_zone, black, 2);
+            draw_out_recta(savf_dlg.scrl.down_zone, black, 2);
+            int up_ind = in_zone(mouse_coords, savf_dlg.scrl.up_zone) ? 1 : 0;
+            instrch_from_im(scrl_up[up_ind], { 0,0,scrl_up[up_ind].w, scrl_up[up_ind].h }, savf_dlg.scrl.up_zone);
+            int down_ind = in_zone(mouse_coords, savf_dlg.scrl.down_zone) ? 1 : 0;
+            instrch_from_im(scrl_down[down_ind], { 0,0,scrl_down[down_ind].w, scrl_down[down_ind].h }, savf_dlg.scrl.down_zone);
+        }
+        savf_dlg.txt_edit.draw();
+    }
+    else if (gif_sav_info)
+    {
+        gif_slct_info.draw();
+    }
+
+    if (show_cursor)
+    {
+        if (cursor_timer.total <= 0.8)
+        {
+            instrch_from_im(my_cursor, { 0,0,my_cursor.w, my_cursor.h }, my_cursor.scr_zone, false, black);
+        }
+        if (cursor_timer.total >= 1.6)
+            cursor_timer.reset();
+    }
+}
+
+void update_app_params()
+{
+    // get mouse input
+    prev_mouse_coords = mouse_coords;
+    if (GetCursorPos(&mouse_coords))
+        if (ScreenToClient(main_wnd, &mouse_coords))
+        {
+        }
+        else
+            OutputDebugStringA("Error while getting mouse coor rel to client area\n");
+    else
+        OutputDebugStringA("Error while getting mouse coor rel to screen\n");
+
+    if (mouse_coords.x > screen_zone.w || mouse_coords.x < 0 || mouse_coords.y < 0 || mouse_coords.y > screen_zone.h)
+        my_mouse = initial_mouse;
+
+    static bool didid = true;
+    if (show_map)
+    {
+        sh_hide_zone = hide.scr_zone;
+        map_zone = region_slct_zone;
+        if (!didid)
+        {
+            OutputDebugStringA(" sh = hide \n");
+            didid = true;
+        }
+    }
+    else
+    {
+        sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
+        if (didid)
+        {
+            OutputDebugStringA("sh = anti_hide \n");
+            didid = false;
+        }
+    }
+
+    if (normal_mode || gif_saving)
+    {
+        // grid and region_select dragging
+        if (my_mouse.l_down && !zooming)
+        {
+            if (mov_region)
+            {
+                if (in_zone(mouse_coords, region_slct_zone))
+                {
+                    // regulating the size adjusting for ratio problms
+                    bmp_region_zone.h = std::ceil(bmp_zone.h * float(map_cell_w) / cell_h);
+                    bmp_region_zone.w = std::ceil(bmp_zone.w * float(map_cell_w) / cell_w);
+
+                    // update region position
+                    bmp_region_zone.x = region_pos0.x + mouse_coords.x - mouse_coords_ldown.x;
+                    bmp_region_zone.y = region_pos0.y + mouse_coords.y - mouse_coords_ldown.y;
+
+                    // assert limits and change map_pos accordingly
+                    if (bmp_region_zone.x <= region_slct_zone.x)
+                    {
+                        if (map_pos.x > 0)
+                            map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
+                        bmp_region_zone.x = region_slct_zone.x;
+                    }
+                    if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
+                    {
+                        if (map_pos.x + map_w < nb_cell_w * map_cell_w)
+                            map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                        bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
+                    }
+                    if (bmp_region_zone.y <= region_slct_zone.y)
+                    {
+                        if (map_pos.y > 0)
+                            map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
+                        bmp_region_zone.y = region_slct_zone.y;
+                    }
+                    if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
+                    {
+                        if (map_pos.y + map_h < nb_cell_h * map_cell_w)
+                        {
+                            map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                        }
+                        bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
+                    }
+
+                    // update bitmap_pos and assert limits
+                    bmp_zone.x = (bmp_region_zone.x + map_pos.x - region_slct_zone.x) * int(cell_w / map_cell_w);
+                    bmp_zone.y = (bmp_region_zone.y + map_pos.y - region_slct_zone.y) * int(cell_w / map_cell_w);
+                    make_inside(bmp_zone, vbmp_zone);
+
+                }
+            }
+            else if (!in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
+            {
+                bmp_zone.x -= (mouse_coords.x - prev_mouse_coords.x) / zoom_ratio_x;
+                bmp_zone.y -= (mouse_coords.y - prev_mouse_coords.y) / zoom_ratio_y;
+                make_inside(bmp_zone, vbmp_zone);
+            }
+        }
+
+        // handling zoom smoothness
+        if (bmp_zone.w != bmp_zone_targ.w || bmp_zone.h != bmp_zone_targ.h)
+        {
+            int zoom_sign = zoom_in ? -1 : 1;
+            bmp_zone.w += zoom_sign * zoom_speed * frame_dur;
+            bmp_zone.h = (bmp_zone.w / screen_zone.w) * screen_zone.h;
+
+            bmp_zone.x += -zoom_sign * pos_zpeed_x * frame_dur;
+            bmp_zone.y += -zoom_sign * pos_zpeed_y * frame_dur;
+            if (zoom_in)
+            {
+                if (bmp_zone.w < bmp_zone_targ.w)
+                {
+                    bmp_zone.w = bmp_zone_targ.w;
+                    bmp_zone.x = bmp_zone_targ.x;
+                    zooming = false;
+                }
+                if (bmp_zone.h < bmp_zone_targ.h)
+                {
+                    bmp_zone.h = bmp_zone_targ.h;
+                    bmp_zone.y = bmp_zone_targ.y;
+                    zooming = false;
+                }
+            }
+            else
+            {
+                if (bmp_zone.w > bmp_zone_targ.w)
+                {
+                    bmp_zone.w = bmp_zone_targ.w;
+                    bmp_zone.x = bmp_zone_targ.x;
+                    zooming = false;
+
+                }
+                if (bmp_zone.h > bmp_zone_targ.h)
+                {
+                    bmp_zone.h = bmp_zone_targ.h;
+                    bmp_zone.y = bmp_zone_targ.y;
+                    zooming = false;
+                }
+            }
+            zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
+            zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
+            make_inside(bmp_zone, vbmp_zone);
+        }
+
+        // change region_pos after zoom and dragging handled
+        if (!mov_region)
+        {
+            bmp_region_zone.x = bmp_zone.x * map_cell_w / cell_w - map_pos.x + region_slct_zone.x;
+            bmp_region_zone.y = bmp_zone.y * map_cell_w / cell_w - map_pos.y + region_slct_zone.y;
+            if (bmp_region_zone.x <= region_slct_zone.x)
+            {
+                if (map_pos.x > 0)
+                    map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
+                bmp_region_zone.x = region_slct_zone.x;
+            }
+            if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
+            {
+                if (map_pos.x + map_w < nb_cell_w * map_cell_w)
+                    map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
+                bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
+            }
+            if (bmp_region_zone.y <= region_slct_zone.y)
+            {
+                if (map_pos.y > 0)
+                    map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
+                bmp_region_zone.y = region_slct_zone.y;
+            }
+            if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
+            {
+                if (map_pos.y + map_h < nb_cell_h * map_cell_w)
+                    map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
+                bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
+            }
+            if (bmp_zone.x == nb_cell_w * cell_w - bmp_zone.w && int(bmp_zone.w) % cell_w != 0)
+                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w + 1;
+            else
+                bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w;
+            if (bmp_zone.y == nb_cell_h * cell_h - bmp_zone.h && int(bmp_zone.h) % cell_h != 0)
+                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h + 1;
+            else
+                bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h;
+        }
+
+        if (normal_mode)
+        {
+            if (int_bar_slctd)
+            {
+                intens_slct.scr_zone.x = mouse_coords.x - intens_slct.scr_zone.w / 2;
+                if (mouse_coords.x >= intens_bar.scr_zone.x + intens_bar.scr_zone.w)
+                    intens_slct.scr_zone.x = intens_bar.scr_zone.x + intens_bar.scr_zone.w - intens_slct.scr_zone.w / 2;
+                if (mouse_coords.x <= intens_bar.scr_zone.x)
+                    intens_slct.scr_zone.x = intens_bar.scr_zone.x - intens_slct.scr_zone.w / 2;
+            }
+            sim_freq = double(5 * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x)) / intens_bar.scr_zone.w + 1;
+            if (!go_mode)
+                step_dur = 1.0 / sim_freq;
+
+            // mouse activation of grid cells + menu zone interaction
+            if (my_mouse.r_down && !go_mode)
+            {
+                if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords, map_zone) && !in_zone(mouse_coords, sh_hide_zone))
+                {
+                    static int last_i;
+                    static int last_j;
+                    point act_cell = get_clk_cell(mouse_coords);
+                    int i = act_cell.x;
+                    int j = act_cell.y;
+                    if (i != last_i || j != last_j)
+                    {
+                        if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
+                        {
+                            if (!grid[j * nb_cell_w + i])
+                                grid_init_stt.push_back(point{ i, j });
+                            else
+                                grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
+                            if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
+                                grid[j * nb_cell_w + i] = !grid[j * nb_cell_w + i];
+                            if (grid[j * nb_cell_w + i])
+                            {
+                                if (i < left_lim)
+                                    left_lim = i;
+                                else if (i > right_lim)
+                                    right_lim = i;
+                                if (j < top_lim)
+                                    top_lim = j;
+                                else if (j > bottom_lim)
+                                    bottom_lim = j;
+                            }
+                        }
+                        top_lim0 = top_lim;
+                        left_lim0 = left_lim;
+                        right_lim0 = right_lim;
+                        bottom_lim0 = bottom_lim;
+                    }
+                    last_i = i;
+                    last_j = j;
+                }
+            }
+            step_edit.handle_slct();
+            my_cursor.scr_zone.x = step_edit.chars_x[step_edit.curs_idx] - step_edit.dx_ref;
+
+            // play button click = simulation on => stepping ahead with given velocity
+            if (sim_on)
+            {
+                if (sim_timer.total >= step_dur)
+                {
+                    sim_timer.reset();
+                    one_step_ahead();
+                }
+            }
+        }
+        if (gif_saving)
+        {
+            if (gif_params_collect)
+            {
+                for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
+                {
+                    gif_params_dlg.txt_edits[i].handle_slct();
+                }
+                txt_edit_params& temp = gif_params_dlg.txt_edits[gif_params_dlg.slctd_edit];
+                my_cursor.scr_zone.x = temp.chars_x[temp.curs_idx] - temp.dx_ref;
+            }
+        }
+    }
+    else if (open_file) // show the open file window
+    {
+        // handling left mouse down
+        if (my_mouse.l_down)
+        {
+            if (opnf_dlg.scrl_exist)
+            {
+                if (opnf_dlg.scrl.drag)
+                {
+                    opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.y0 + mouse_coords.y - mouse_coords_ldown.y;
+                    opnf_dlg.fhref = opnf_dlg.exp_zone.y - (opnf_dlg.scrl.scrler_zone.y - opnf_dlg.scrl.zone.y) * opnf_dlg.scrl.ratio;
+                }
+                else if (opnf_dlg.scrl.timer.total > 0.3)
+                {
+                    if (in_zone(mouse_coords, opnf_dlg.scrl.up_zone) && in_zone(mouse_coords_ldown, opnf_dlg.scrl.up_zone))
+                    {
+                        opnf_dlg.fhref += opnf_dlg.file_h;
+                        opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.zone.y + (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.scrl.ratio;
+                    }
+                    else if (in_zone(mouse_coords, opnf_dlg.scrl.down_zone) && in_zone(mouse_coords_ldown, opnf_dlg.scrl.down_zone))
+                    {
+                        opnf_dlg.fhref -= opnf_dlg.file_h;
+                        opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.zone.y + (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.scrl.ratio;
+                    }
+                    else if (opnf_dlg.scrl.attrct)
+                    {
+                        if (in_zone(mouse_coords, opnf_dlg.scrl.zone) && !in_zone(mouse_coords, opnf_dlg.scrl.scrler_zone))
+                        {
+                            int new_dir = (opnf_dlg.scrl.scrler_zone.y - mouse_coords.y > 0) ? -1 : 1;
+                            if (new_dir == opnf_dlg.scrl.dir)
+                            {
+                                opnf_dlg.scrl.scrler_zone.y += opnf_dlg.scrl.dir * opnf_dlg.scrl.scrler_zone.h * 0.7;
+                                opnf_dlg.fhref = opnf_dlg.exp_zone.y - (opnf_dlg.scrl.scrler_zone.y - opnf_dlg.scrl.zone.y) * opnf_dlg.scrl.ratio;
+                            }
+                        }
+                    }
+                }
+                make_inside(opnf_dlg.scrl.scrler_zone.y, opnf_dlg.scrl.zone.y, opnf_dlg.scrl.zone.y + opnf_dlg.scrl.zone.h - opnf_dlg.scrl.scrler_zone.h);
+                make_inside(opnf_dlg.fhref, opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h - (opnf_dlg.nb_files + 2) * opnf_dlg.file_h, opnf_dlg.exp_zone.y);
+            }
+        }
+    }
+    else if (save_file)
+    {
+        // handling left mouse down
+        if (my_mouse.l_down)
+        {
+            if (savf_dlg.scrl_exist)
+            {
+                if (savf_dlg.scrl.drag)
+                {
+                    savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.y0 + mouse_coords.y - mouse_coords_ldown.y;
+                    savf_dlg.fhref = savf_dlg.exp_zone.y - (savf_dlg.scrl.scrler_zone.y - savf_dlg.scrl.zone.y) * savf_dlg.scrl.ratio;
+                }
+                else if (savf_dlg.scrl.timer.total > 0.3)
+                {
+                    if (in_zone(mouse_coords, savf_dlg.scrl.up_zone) && in_zone(mouse_coords_ldown, savf_dlg.scrl.up_zone))
+                    {
+                        savf_dlg.fhref += savf_dlg.file_h;
+                        savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.zone.y + (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.scrl.ratio;
+                    }
+                    else if (in_zone(mouse_coords, savf_dlg.scrl.down_zone) && in_zone(mouse_coords_ldown, savf_dlg.scrl.down_zone))
+                    {
+                        savf_dlg.fhref -= savf_dlg.file_h;
+                        savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.zone.y + (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.scrl.ratio;
+                    }
+                    else if (savf_dlg.scrl.attrct)
+                    {
+                        if (in_zone(mouse_coords, savf_dlg.scrl.zone) && !in_zone(mouse_coords, savf_dlg.scrl.scrler_zone))
+                        {
+                            int new_dir = (savf_dlg.scrl.scrler_zone.y - mouse_coords.y > 0) ? -1 : 1;
+                            if (new_dir == savf_dlg.scrl.dir)
+                            {
+                                savf_dlg.scrl.scrler_zone.y += savf_dlg.scrl.dir * savf_dlg.scrl.scrler_zone.h * 0.7;
+                                savf_dlg.fhref = savf_dlg.exp_zone.y - (savf_dlg.scrl.scrler_zone.y - savf_dlg.scrl.zone.y) * savf_dlg.scrl.ratio;
+                            }
+                        }
+                    }
+                }
+                make_inside(savf_dlg.scrl.scrler_zone.y, savf_dlg.scrl.zone.y, savf_dlg.scrl.zone.y + savf_dlg.scrl.zone.h - savf_dlg.scrl.scrler_zone.h);
+                make_inside(savf_dlg.fhref, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h - (savf_dlg.nb_files + 2) * savf_dlg.file_h, savf_dlg.exp_zone.y);
+            }
+        }
+        savf_dlg.txt_edit.handle_slct();
+        my_cursor.scr_zone.x = savf_dlg.txt_edit.chars_x[savf_dlg.txt_edit.curs_idx] - savf_dlg.txt_edit.dx_ref;
+    }
+    if (actual_step == target_step)
+    {
+        prv_targ_stp = target_step;
+        sim_on = false;
+        go_mode = false;
+    }
+}
+
+void init_everything()
+{
+    QueryPerformanceFrequency((LARGE_INTEGER*)&timer::count_freq);
     bmp_zone.w = screen_zone.w;
     bmp_zone.h = screen_zone.h;
     bmp_zone_targ.w = bmp_zone.w;
@@ -2660,10 +3317,190 @@ WinMain(HINSTANCE Instance,
     bmp_zone.y = double(nb_cell_h * cell_h - screen_zone.h) / 2;
     vbmp_zone = { 0, 0, nb_cell_w * cell_w, nb_cell_h * cell_h };
 
-    QueryPerformanceFrequency((LARGE_INTEGER*)&timer::count_freq);
-    timer frame_timer;
-    frame_timer.reset();
+    // load images
+    for (int i = 0; i < 3; i++)
+    {
+        play_butt[i].pixels = (uint32*)stbi_load(play_butt_fn[i], &play_butt[i].w, &play_butt[i].h, NULL, 0);
+        pause_butt[i].pixels = (uint32*)stbi_load(pause_butt_fn[i], &pause_butt[i].w, &pause_butt[i].h, NULL, 0);
+        reinit_butt[i].pixels = (uint32*)stbi_load(reinit_butt_fn[i], &reinit_butt[i].w, &reinit_butt[i].h, NULL, 0);
+        next_butt[i].pixels = (uint32*)stbi_load(next_butt_fn[i], &next_butt[i].w, &next_butt[i].h, NULL, 0);
+    }
+    for (int i = 0; i < 2; i++)
+    {
+        scrl_up[i].pixels = (uint32*)stbi_load(scrl_up_fn[i], &scrl_up[i].w, &scrl_up[i].h, NULL, 0);
+        scrl_down[i].pixels = (uint32*)stbi_load(scrl_down_fn[i], &scrl_down[i].w, &scrl_down[i].h, NULL, 0);
+    }
+    intens_slct.pixels = (uint32*)stbi_load(intens_slct_fn, &intens_slct.w, &intens_slct.h, NULL, 0);
+    intens_bar.pixels = (uint32*)stbi_load(intens_bar_fn, &intens_bar.w, &intens_bar.h, NULL, 0);
+    my_cursor.pixels = (uint32*)stbi_load(cursor_fn, &my_cursor.w, &my_cursor.h, NULL, 0);
+    num_letters.pixels = (uint32*)stbi_load(num_letters_fn, &num_letters.w, &num_letters.h, NULL, 0);
+    hide.pixels = (uint32*)stbi_load(hide_fn, &hide.w, &hide.h, NULL, 0);
+    anti_hide.pixels = (uint32*)stbi_load(anti_hide_fn, &anti_hide.w, &anti_hide.h, NULL, 0);
+    folder_icon.pixels = (uint32*)stbi_load(folder_icon_fn, &folder_icon.w, &folder_icon.h, NULL, 0);
 
+    // initialise freetype, only one face font is used 
+    FT_Init_FreeType(&ft); // TODO: handle errors 
+    FT_New_Face(ft, cascadia_font, 0, &cascadia_face); // TODO: handle erros 
+
+    // set different zones and positions
+    menu_zone = { 4,4,int(0.60 * screen_zone.w),int(0.15 * screen_zone.h) };
+    num_width = menu_zone.w / 60;
+    num_height = menu_zone.h / 4;
+
+    pause_butt[0].scr_zone = { menu_zone.x, menu_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24 };
+    play_butt[0].scr_zone = pause_butt[0].scr_zone;
+    next_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w / 96, play_butt[0].scr_zone.y + play_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16,  7 * menu_zone.h / 24 };
+    reinit_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w / 12 , play_butt[0].scr_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24 };
+    for (int i = 1; i < 3; i++)
+    {
+        pause_butt[i].scr_zone = pause_butt[0].scr_zone;
+        play_butt[i].scr_zone = play_butt[0].scr_zone;
+        next_butt[i].scr_zone = next_butt[0].scr_zone;
+        reinit_butt[i].scr_zone = reinit_butt[0].scr_zone;
+    }
+
+    intens_bar.scr_zone = { menu_zone.x + 2 * menu_zone.w / 12 + menu_zone.w / 80 + menu_zone.w / 50, menu_zone.y + 3 * menu_zone.h / 5, menu_zone.w / 3 - menu_zone.w / 40 - 2 * num_width - menu_zone.w / 50, menu_zone.h / 20 };
+    intens_slct.scr_zone = { intens_bar.scr_zone.x - menu_zone.w / 80, intens_bar.scr_zone.y + intens_bar.scr_zone.h / 2 - menu_zone.h / 4, menu_zone.w / 40, menu_zone.h / 2 };
+
+    step_edit.zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w / 32, menu_zone.y + menu_zone.h / 3 , menu_zone.w * 5 / 48, num_height + 6 };
+
+    go_butt_zone = { step_edit.zone.x , step_edit.zone.y + step_edit.zone.h + menu_zone.h / 12, step_edit.zone.w, menu_zone.h / 4 };
+
+    go_to_stp_zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w / 48, step_edit.zone.y - menu_zone.h * 25 / 120, 3 * menu_zone.w / 24, menu_zone.h * 15 / 120 };
+    actual_step_zone = { menu_zone.x + 8 * menu_zone.w / 12 + menu_zone.w / 48, go_to_stp_zone.y, menu_zone.w / 6 , menu_zone.h * 15 / 120 };
+
+    save_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 16, actual_step_zone.y + menu_zone.h * 5 / 120, menu_zone.w / 12, menu_zone.h * 40 / 120 };
+    open_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 16, actual_step_zone.y + save_butt_zone.h + menu_zone.h * 10 / 120, menu_zone.w / 12, menu_zone.h * 40 / 120 };
+    clear_butt_zone = { reinit_butt[0].scr_zone.x + menu_zone.w / 96, reinit_butt[0].scr_zone.y + reinit_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16, 7 * menu_zone.h / 24 };
+
+    sim_vel_zone = { intens_bar.scr_zone.x - menu_zone.w * 8 / 800, go_to_stp_zone.y , intens_bar.scr_zone.w + menu_zone.w * 20 / 800, menu_zone.h * 15 / 120 };
+    region_slct_zone = { screen_zone.w - map_w - menu_zone.w * 20 / 800, screen_zone.h - map_h - menu_zone.h * 20 / 120, map_w, map_h };
+    map_pos = { double(nb_cell_w * map_cell_w - map_w) / 2 , double(nb_cell_h * map_cell_w - map_h) / 2 };
+
+    bmp_region_zone.x = bmp_zone.x * int(map_cell_w / cell_w) - map_pos.x + region_slct_zone.x;
+    bmp_region_zone.y = bmp_zone.y * int(map_cell_w / cell_w) - map_pos.y + region_slct_zone.y;
+    bmp_region_zone.w = int(bmp_zone.w) * map_cell_w / cell_w;
+    bmp_region_zone.h = int(bmp_zone.h) * map_cell_w / cell_h;
+
+    hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w + menu_zone.w * 3 / 800;
+    hide.scr_zone.y = region_slct_zone.y - hide.h - menu_zone.h * 3.0 / 120;
+    anti_hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w;
+    anti_hide.scr_zone.y = region_slct_zone.y + region_slct_zone.h - hide.h;
+
+    opnf_dlg.zone = { screen_zone.w / 3, screen_zone.h / 5, screen_zone.w / 3, 3 * screen_zone.h / 5 };
+    opnf_dlg.exp_zone_wscrl = { opnf_dlg.zone.x + opnf_dlg.zone.w / 20, opnf_dlg.zone.y + opnf_dlg.zone.h / 20, 18 * opnf_dlg.zone.w / 20, 16 * opnf_dlg.zone.h / 20 };
+    opnf_dlg.exp_zone = opnf_dlg.exp_zone_wscrl;
+    opnf_dlg.scrl.scrler_zone = { opnf_dlg.exp_zone.x + opnf_dlg.exp_zone.w - opnf_dlg.exp_zone.w / 16, opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h / 16 + 2, opnf_dlg.exp_zone.w / 16, opnf_dlg.exp_zone.h - 2 * opnf_dlg.exp_zone.h / 16 - 4 };
+    opnf_dlg.scrl.zone = opnf_dlg.scrl.scrler_zone;
+    opnf_dlg.scrl.up_zone = { opnf_dlg.scrl.zone.x, opnf_dlg.exp_zone.y, opnf_dlg.scrl.zone.w, opnf_dlg.exp_zone.h / 16 };
+    opnf_dlg.scrl.down_zone = { opnf_dlg.scrl.zone.x, opnf_dlg.scrl.zone.y + opnf_dlg.scrl.zone.h + 2, opnf_dlg.scrl.zone.w, opnf_dlg.exp_zone.h - opnf_dlg.scrl.zone.h - opnf_dlg.scrl.up_zone.h - 4 };
+    opnf_dlg.exp_zone_scrl = opnf_dlg.exp_zone_wscrl;
+    opnf_dlg.exp_zone_scrl.w -= opnf_dlg.scrl.scrler_zone.w + 2;
+    opnf_dlg.open_zone = { opnf_dlg.zone.x + 9 * opnf_dlg.zone.w / 12 , opnf_dlg.zone.y + 18 * opnf_dlg.zone.h / 20, opnf_dlg.zone.w / 6, opnf_dlg.zone.h / 20 };
+    opnf_dlg.cancel_zone = { opnf_dlg.zone.x + 6 * opnf_dlg.zone.w / 12, opnf_dlg.zone.y + 18 * opnf_dlg.zone.h / 20, opnf_dlg.zone.w / 6, opnf_dlg.zone.h / 20 };
+    opnf_dlg.file_h = opnf_dlg.exp_zone.h / 10;
+    opnf_dlg.fhref = opnf_dlg.exp_zone.y;
+
+    savf_dlg.zone = opnf_dlg.zone;
+    savf_dlg.exp_zone_wscrl = opnf_dlg.exp_zone_wscrl;
+    savf_dlg.exp_zone_wscrl.h = 13 * savf_dlg.zone.h / 20;
+    savf_dlg.exp_zone = savf_dlg.exp_zone_wscrl;
+    savf_dlg.scrl.scrler_zone = { savf_dlg.exp_zone.x + savf_dlg.exp_zone.w - savf_dlg.exp_zone.w / 16, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h / 16 + 2, savf_dlg.exp_zone.w / 16, savf_dlg.exp_zone.h - 2 * savf_dlg.exp_zone.h / 16 - 4 };
+    savf_dlg.scrl.zone = savf_dlg.scrl.scrler_zone;
+    savf_dlg.scrl.up_zone = { savf_dlg.scrl.zone.x, savf_dlg.exp_zone.y, savf_dlg.scrl.zone.w, savf_dlg.exp_zone.h / 16 };
+    savf_dlg.scrl.down_zone = { savf_dlg.scrl.zone.x, savf_dlg.scrl.zone.y + savf_dlg.scrl.zone.h + 2, savf_dlg.scrl.zone.w, savf_dlg.exp_zone.h - savf_dlg.scrl.zone.h - savf_dlg.scrl.up_zone.h - 4 };
+    savf_dlg.exp_zone_scrl = savf_dlg.exp_zone_wscrl;
+    savf_dlg.exp_zone_scrl.w -= savf_dlg.scrl.scrler_zone.w + 2;
+    savf_dlg.open_zone = opnf_dlg.open_zone;
+    savf_dlg.cancel_zone = opnf_dlg.cancel_zone;
+    savf_dlg.file_h = savf_dlg.exp_zone.h / 10;
+    savf_dlg.fhref = savf_dlg.exp_zone.y;
+    savf_dlg.txt_edit.zone = { savf_dlg.exp_zone.x, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h + savf_dlg.zone.h / 20, savf_dlg.exp_zone.w, savf_dlg.file_h };
+    savf_dlg.txt_edit.txt_zone = { savf_dlg.txt_edit.zone.x + savf_dlg.txt_edit.zone.w / 40  , savf_dlg.txt_edit.zone.y + savf_dlg.file_h / 8 , savf_dlg.exp_zone.w - savf_dlg.exp_zone.w / 20, 3 * savf_dlg.file_h / 4 };
+
+    opnf_dlg.allowed_ext.push_back(L".txt");
+    savf_dlg.allowed_ext.push_back(L".txt");
+    savf_dlg.allowed_ext.push_back(L".gif");
+
+    opn_wrong_f.txt = L"The chosen file contains incompatible data! Please choose a valid file.";
+    opn_wrong_f.title = L"Error";
+    opn_wrong_f.zone = { opnf_dlg.zone.x + opnf_dlg.zone.w / 10, opnf_dlg.zone.y + opnf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10, 0 };
+    opn_wrong_f.title_h = opnf_dlg.zone.w / 12;
+    opn_wrong_f.fill_params(cascadia_face);
+
+    gif_slct_info.txt = L"Hold mouse right button and select the region you want to save as gif.";
+    gif_slct_info.title = L"INFO";
+    gif_slct_info.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
+    gif_slct_info.title_h = savf_dlg.zone.w / 12;
+    gif_slct_info.fill_params(cascadia_face);
+
+    gif_params_dlg.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
+    gif_params_dlg.title = L"Parameters";
+    gif_params_dlg.title_h = savf_dlg.zone.w / 12;
+    gif_params_dlg.txts.push_back(L"Velocity (generation/second) : ");
+    gif_params_dlg.txts.push_back(L"Number of generations : ");
+    gif_params_dlg.txts.push_back(L"added : ");
+    gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
+    gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 5 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
+    gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 7 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
+
+    txt_edit_params temp;
+    temp.zone = { gif_params_dlg.zone.x + 14 * gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, gif_params_dlg.zone.w / 4, gif_params_dlg.title_h / 2 };
+    temp.txt_zone = { temp.zone.x + temp.zone.w / 20, temp.zone.y + temp.zone.h / 8  , temp.zone.w - temp.zone.w / 10, 3 * temp.zone.h / 4 };
+    gif_params_dlg.txt_edits.push_back(temp);
+    temp.zone.y += gif_params_dlg.title_h;
+    temp.txt_zone.y += gif_params_dlg.title_h;
+    gif_params_dlg.txt_edits.push_back(temp);
+
+    temp.zone.y += gif_params_dlg.title_h;
+    temp.txt_zone.y += gif_params_dlg.title_h;
+    gif_params_dlg.txt_edits.push_back(temp);
+    gif_params_dlg.fill_params();
+
+    // step_edit params 
+    step_edit.txt_zone = { step_edit.zone.x + step_edit.zone.w / 10, step_edit.zone.y + step_edit.zone.h / 8, step_edit.zone.w - step_edit.zone.w / 5,  3 * step_edit.zone.h / 4 };
+    my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y , 2, step_edit.txt_zone.h };
+    step_edit.chars_x.push_back(my_cursor.scr_zone.x);
+    step_edit.dx_ref = 0;
+    step_edit.curs_idx = 0;
+    step_edit.max_crcs = 5;
+
+    // Load the glyphs for already known sizes 
+    load_glyphs(cascadia_face, opnf_dlg.file_h);
+    load_glyphs(cascadia_face, savf_dlg.txt_edit.txt_zone.h);
+    load_glyphs(cascadia_face, step_edit.txt_zone.h);
+    for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
+        load_glyphs(cascadia_face, gif_params_dlg.txt_edits[i].txt_zone.h);
+
+    // allocate memory buffer representing the UI 
+    if (bmp_memory)
+    {
+        VirtualFree(bmp_memory, 0, MEM_RELEASE);
+    }
+
+    bmp_info.bmiHeader.biSize = sizeof(bmp_info.bmiHeader);
+    bmp_info.bmiHeader.biWidth = screen_zone.w;
+    bmp_info.bmiHeader.biHeight = -screen_zone.h;
+    bmp_info.bmiHeader.biPlanes = 1;
+    bmp_info.bmiHeader.biBitCount = 32;
+    bmp_info.bmiHeader.biCompression = BI_RGB;
+
+    int bmp_mem_size = (screen_zone.w * screen_zone.h) * bytes_per_pixel;
+    bmp_memory = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
+
+    frame_timer.reset();
+    app_timer.reset();
+    cursor_timer.reset();
+}
+
+int CALLBACK
+WinMain(HINSTANCE Instance,
+    HINSTANCE PrevInstance,
+    LPSTR CommandLine,
+    int ShowCode)
+{
+    screen_zone.w = 0.8 * GetSystemMetrics(SM_CXSCREEN);
+    screen_zone.h = 0.8 * GetSystemMetrics(SM_CYSCREEN);
     // Create the window class gor the Editor
     WNDCLASSA wnd_class = {};
     wnd_class.lpfnWndProc = wnd_callback;
@@ -2675,7 +3512,7 @@ WinMain(HINSTANCE Instance,
     {
         RECT client_area_rect = { 0, 0, screen_zone.w, screen_zone.h};
         AdjustWindowRect(&client_area_rect, WS_CAPTION | WS_MINIMIZEBOX | WS_VISIBLE , false);
-        HWND wnd =
+        main_wnd =
             CreateWindowExA(
                 0,
                 wnd_class.lpszClassName,
@@ -2692,189 +3529,9 @@ WinMain(HINSTANCE Instance,
 
         running = true;
 
-        if (wnd)
+        if (main_wnd)
         {
-            // load images
-            for (int i = 0; i < 3; i++)
-            {
-                play_butt[i].pixels   = (uint32*)stbi_load(play_butt_fn[i], &play_butt[i].w, &play_butt[i].h, NULL, 0);
-                pause_butt[i].pixels  = (uint32*)stbi_load(pause_butt_fn[i], &pause_butt[i].w, &pause_butt[i].h, NULL, 0);
-                reinit_butt[i].pixels = (uint32*)stbi_load(reinit_butt_fn[i], &reinit_butt[i].w, &reinit_butt[i].h, NULL, 0);
-                next_butt[i].pixels   = (uint32*)stbi_load(next_butt_fn[i], &next_butt[i].w, &next_butt[i].h, NULL, 0);
-            }
-            for (int i = 0; i < 2; i++)
-            {
-                scrl_up[i].pixels = (uint32*)stbi_load(scrl_up_fn[i], &scrl_up[i].w, &scrl_up[i].h, NULL, 0);
-                scrl_down[i].pixels = (uint32*)stbi_load(scrl_down_fn[i], &scrl_down[i].w, &scrl_down[i].h, NULL, 0);
-            }
-            intens_slct.pixels = (uint32*)stbi_load(intens_slct_fn, &intens_slct.w, &intens_slct.h, NULL, 0);
-            intens_bar.pixels = (uint32*)stbi_load(intens_bar_fn, &intens_bar.w, &intens_bar.h, NULL, 0);
-            my_cursor.pixels = (uint32*)stbi_load(cursor_fn, &my_cursor.w, &my_cursor.h, NULL, 0);
-            num_letters.pixels = (uint32*)stbi_load(num_letters_fn, &num_letters.w, &num_letters.h, NULL, 0);
-            hide.pixels = (uint32*)stbi_load(hide_fn, &hide.w, &hide.h, NULL, 0);
-            anti_hide.pixels = (uint32*)stbi_load(anti_hide_fn, &anti_hide.w, &anti_hide.h, NULL, 0);
-            folder_icon.pixels = (uint32*)stbi_load(folder_icon_fn, &folder_icon.w, &folder_icon.h, NULL, 0);
-
-            // initialise freetype, only one face font is used 
-            FT_Library ft;
-            if (FT_Init_FreeType(&ft))
-            {
-                return -1;
-            }
-            if (FT_New_Face(ft, cascadia_font, 0, &cascadia_face))
-            {
-                return -1;
-            }
-
-            // set different zones and positions
-            menu_zone = { 4,4,int(0.60 * screen_zone.w),int(0.15*screen_zone.h)};
-            num_width = menu_zone.w / 60;
-            num_height = menu_zone.h / 4;
-
-            pause_butt[0].scr_zone  = { menu_zone.x, menu_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24};
-            play_butt[0].scr_zone   = pause_butt[0].scr_zone;
-            next_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w / 96, play_butt[0].scr_zone.y + play_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16,  7*menu_zone.h / 24 };
-            reinit_butt[0].scr_zone = { play_butt[0].scr_zone.x + menu_zone.w/12 , play_butt[0].scr_zone.y, menu_zone.w / 12, 15 * menu_zone.h / 24 };
-            for (int i = 1; i < 3; i++)
-            {
-                pause_butt[i].scr_zone = pause_butt[0].scr_zone;
-                play_butt[i].scr_zone = play_butt[0].scr_zone;
-                next_butt[i].scr_zone = next_butt[0].scr_zone;
-                reinit_butt[i].scr_zone = reinit_butt[0].scr_zone;
-            }
-
-            intens_bar.scr_zone = { menu_zone.x + 2*menu_zone.w/12 + menu_zone.w/80 + menu_zone.w/50, menu_zone.y + 3*menu_zone.h/5, menu_zone.w/3 - menu_zone.w/40 - 2 * num_width - menu_zone.w / 50, menu_zone.h/20};
-            intens_slct.scr_zone = { intens_bar.scr_zone.x - menu_zone.w/80, intens_bar.scr_zone.y + intens_bar.scr_zone.h/2 - menu_zone.h/4, menu_zone.w/40, menu_zone.h/2 };
-            
-            step_edit.zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w /32, menu_zone.y + menu_zone.h / 3 , menu_zone.w *5/ 48, num_height + 6};
-            
-            go_butt_zone = { step_edit.zone.x , step_edit.zone.y + step_edit.zone.h + menu_zone.h/12, step_edit.zone.w, menu_zone.h / 4 };
-
-            go_to_stp_zone = { menu_zone.x + 6 * menu_zone.w / 12 + menu_zone.w / 48, step_edit.zone.y - menu_zone.h * 25/120, 3 * menu_zone.w / 24, menu_zone.h * 15/120 };
-            actual_step_zone = { menu_zone.x + 8 * menu_zone.w / 12 + menu_zone.w/48, go_to_stp_zone.y, menu_zone.w/6 , menu_zone.h * 15 /120};
-            
-            save_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 16, actual_step_zone.y + menu_zone.h * 5 /120, menu_zone.w / 12, menu_zone.h * 40/120 };
-            open_butt_zone = { menu_zone.x + 10 * menu_zone.w / 12 + menu_zone.w / 16, actual_step_zone.y + save_butt_zone.h + menu_zone.h * 10/120, menu_zone.w / 12, menu_zone.h * 40 /120};
-            clear_butt_zone = { reinit_butt[0].scr_zone.x + menu_zone.w / 96, reinit_butt[0].scr_zone.y + reinit_butt[0].scr_zone.h + menu_zone.h / 24, menu_zone.w / 16, 7 * menu_zone.h / 24 };
-
-            sim_vel_zone = { intens_bar.scr_zone.x - menu_zone.w * 8/800, go_to_stp_zone.y , intens_bar.scr_zone.w + menu_zone.w * 20/800, menu_zone.h * 15/120};
-            region_slct_zone = { screen_zone.w - map_w- menu_zone.w * 20/800, screen_zone.h - map_h- menu_zone.h * 20 /120, map_w, map_h};
-            map_pos = { double(nb_cell_w * map_cell_w - map_w) / 2 , double(nb_cell_h * map_cell_w - map_h) / 2 };
-
-            bmp_region_zone.x = bmp_zone.x * int(map_cell_w / cell_w) - map_pos.x + region_slct_zone.x;
-            bmp_region_zone.y = bmp_zone.y * int(map_cell_w / cell_w) - map_pos.y + region_slct_zone.y;
-            bmp_region_zone.w = int(bmp_zone.w)*map_cell_w / cell_w;
-            bmp_region_zone.h = int(bmp_zone.h) * map_cell_w / cell_h;
-
-            hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w + menu_zone.w * 3/800;
-            hide.scr_zone.y = region_slct_zone.y - hide.h - menu_zone.h * 3.0/120;
-            anti_hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w;
-            anti_hide.scr_zone.y = region_slct_zone.y + region_slct_zone.h - hide.h;
-
-            opnf_dlg.zone             = { screen_zone.w / 3, screen_zone.h / 5, screen_zone.w / 3, 3*screen_zone.h / 5 };
-            opnf_dlg.exp_zone_wscrl   = { opnf_dlg.zone.x + opnf_dlg.zone.w / 20, opnf_dlg.zone.y + opnf_dlg.zone.h / 20, 18 * opnf_dlg.zone.w / 20, 16 * opnf_dlg.zone.h / 20 };
-            opnf_dlg.exp_zone         = opnf_dlg.exp_zone_wscrl;
-            opnf_dlg.scrl.scrler_zone = { opnf_dlg.exp_zone.x + opnf_dlg.exp_zone.w - opnf_dlg.exp_zone.w / 16, opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h / 16 + 2, opnf_dlg.exp_zone.w / 16, opnf_dlg.exp_zone.h - 2* opnf_dlg.exp_zone.h / 16 - 4};
-            opnf_dlg.scrl.zone        = opnf_dlg.scrl.scrler_zone;
-            opnf_dlg.scrl.up_zone     = { opnf_dlg.scrl.zone.x, opnf_dlg.exp_zone.y, opnf_dlg.scrl.zone.w, opnf_dlg.exp_zone.h / 16 };
-            opnf_dlg.scrl.down_zone   = { opnf_dlg.scrl.zone.x, opnf_dlg.scrl.zone.y + opnf_dlg.scrl.zone.h + 2, opnf_dlg.scrl.zone.w, opnf_dlg.exp_zone.h - opnf_dlg.scrl.zone.h - opnf_dlg.scrl.up_zone.h - 4};
-            opnf_dlg.exp_zone_scrl    = opnf_dlg.exp_zone_wscrl;
-            opnf_dlg.exp_zone_scrl.w -= opnf_dlg.scrl.scrler_zone.w + 2;
-            opnf_dlg.open_zone        = { opnf_dlg.zone.x + 9 * opnf_dlg.zone.w / 12 , opnf_dlg.zone.y + 18 * opnf_dlg.zone.h / 20, opnf_dlg.zone.w / 6, opnf_dlg.zone.h / 20 };
-            opnf_dlg.cancel_zone      = { opnf_dlg.zone.x + 6 * opnf_dlg.zone.w / 12, opnf_dlg.zone.y + 18 * opnf_dlg.zone.h / 20, opnf_dlg.zone.w / 6, opnf_dlg.zone.h / 20 };
-            opnf_dlg.file_h = opnf_dlg.exp_zone.h / 10;
-            opnf_dlg.fhref = opnf_dlg.exp_zone.y;
-
-            savf_dlg.zone             = opnf_dlg.zone;
-            savf_dlg.exp_zone_wscrl   = opnf_dlg.exp_zone_wscrl;
-            savf_dlg.exp_zone_wscrl.h = 13 * savf_dlg.zone.h / 20;
-            savf_dlg.exp_zone         = savf_dlg.exp_zone_wscrl;
-            savf_dlg.scrl.scrler_zone = { savf_dlg.exp_zone.x + savf_dlg.exp_zone.w - savf_dlg.exp_zone.w / 16, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h / 16 + 2, savf_dlg.exp_zone.w / 16, savf_dlg.exp_zone.h - 2 * savf_dlg.exp_zone.h / 16 - 4 };
-            savf_dlg.scrl.zone        = savf_dlg.scrl.scrler_zone;
-            savf_dlg.scrl.up_zone     = { savf_dlg.scrl.zone.x, savf_dlg.exp_zone.y, savf_dlg.scrl.zone.w, savf_dlg.exp_zone.h / 16 };
-            savf_dlg.scrl.down_zone   = { savf_dlg.scrl.zone.x, savf_dlg.scrl.zone.y + savf_dlg.scrl.zone.h + 2, savf_dlg.scrl.zone.w, savf_dlg.exp_zone.h - savf_dlg.scrl.zone.h - savf_dlg.scrl.up_zone.h - 4 };
-            savf_dlg.exp_zone_scrl    = savf_dlg.exp_zone_wscrl;
-            savf_dlg.exp_zone_scrl.w -= savf_dlg.scrl.scrler_zone.w + 2;
-            savf_dlg.open_zone        = opnf_dlg.open_zone;
-            savf_dlg.cancel_zone      = opnf_dlg.cancel_zone;
-            savf_dlg.file_h = savf_dlg.exp_zone.h / 10;
-            savf_dlg.fhref  = savf_dlg.exp_zone.y;
-            savf_dlg.txt_edit.zone = { savf_dlg.exp_zone.x, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h + savf_dlg.zone.h / 20, savf_dlg.exp_zone.w, savf_dlg.file_h};
-            savf_dlg.txt_edit.txt_zone = { savf_dlg.txt_edit.zone.x  + savf_dlg.txt_edit.zone.w/40  , savf_dlg.txt_edit.zone.y + savf_dlg.file_h / 8 , savf_dlg.exp_zone.w - savf_dlg.exp_zone.w /20, 3*savf_dlg.file_h / 4 };
-
-            opnf_dlg.allowed_ext.push_back(L".txt");
-            savf_dlg.allowed_ext.push_back(L".txt");
-            savf_dlg.allowed_ext.push_back(L".gif");
-
-            opn_wrong_f.txt =  L"The chosen file contains incompatible data! Please choose a valid file." ; 
-            opn_wrong_f.title = L"Error";
-            opn_wrong_f.zone = { opnf_dlg.zone.x + opnf_dlg.zone.w / 10, opnf_dlg.zone.y + opnf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10, 0 };
-            opn_wrong_f.title_h = opnf_dlg.zone.w / 12;
-            opn_wrong_f.fill_params(cascadia_face);
-
-            gif_slct_info.txt = L"Hold mouse right button and select the region you want to save as gif.";
-            gif_slct_info.title = L"INFO";
-            gif_slct_info.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
-            gif_slct_info.title_h = savf_dlg.zone.w / 12;
-            gif_slct_info.fill_params(cascadia_face);
-            
-            gif_params_dlg.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
-            gif_params_dlg.title = L"Parameters";
-            gif_params_dlg.title_h = savf_dlg.zone.w / 12;
-            gif_params_dlg.txts.push_back(L"Velocity (generation/second) : ");
-            gif_params_dlg.txts.push_back(L"Number of generations : ");
-            gif_params_dlg.txts.push_back(L"added : ");
-            gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w /3, 5 * gif_params_dlg.title_h / 12});
-            gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 5 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w /3, 5 * gif_params_dlg.title_h / 12 });
-            gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 7 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
-
-            txt_edit_params temp;
-            temp.zone = { gif_params_dlg.zone.x + 14 * gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, gif_params_dlg.zone.w / 4, gif_params_dlg.title_h / 2 };
-            temp.txt_zone = { temp.zone.x + temp.zone.w / 20, temp.zone.y + temp.zone.h/8  , temp.zone.w - temp.zone.w/10, 3* temp.zone.h/4};
-            gif_params_dlg.txt_edits.push_back(temp);
-            temp.zone.y += gif_params_dlg.title_h;
-            temp.txt_zone.y += gif_params_dlg.title_h;
-            gif_params_dlg.txt_edits.push_back(temp);
-
-            temp.zone.y += gif_params_dlg.title_h;
-            temp.txt_zone.y += gif_params_dlg.title_h;
-            gif_params_dlg.txt_edits.push_back(temp);
-            gif_params_dlg.fill_params();
-            
-            // step_edit params 
-            step_edit.txt_zone = { step_edit.zone.x + step_edit.zone.w / 10, step_edit.zone.y + step_edit.zone.h / 8, step_edit.zone.w - step_edit.zone.w / 5,  3 * step_edit.zone.h / 4 };
-            my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y , 2, step_edit.txt_zone.h };
-            step_edit.chars_x.push_back(my_cursor.scr_zone.x);
-            step_edit.dx_ref = 0;
-            step_edit.curs_idx = 0;
-            step_edit.max_crcs = 5;
-
-            // Load the glyphs for already known sizes 
-            load_glyphs(cascadia_face, opnf_dlg.file_h);
-            load_glyphs(cascadia_face, savf_dlg.txt_edit.txt_zone.h);
-            load_glyphs(cascadia_face, step_edit.txt_zone.h);
-            for(int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
-                load_glyphs(cascadia_face, gif_params_dlg.txt_edits[i].txt_zone.h);
-
-            // allocate memory buffer representing the UI 
-            if (bmp_memory)
-            {
-                VirtualFree(bmp_memory, 0, MEM_RELEASE);
-            }
-
-            bmp_info.bmiHeader.biSize = sizeof(bmp_info.bmiHeader);
-            bmp_info.bmiHeader.biWidth = screen_zone.w;
-            bmp_info.bmiHeader.biHeight = -screen_zone.h;
-            bmp_info.bmiHeader.biPlanes = 1;
-            bmp_info.bmiHeader.biBitCount = 32;
-            bmp_info.bmiHeader.biCompression = BI_RGB;
-                
-            int bmp_mem_size = (screen_zone.w * screen_zone.h) * bytes_per_pixel;
-            bmp_memory = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
-
-            frame_timer.reset();
-            app_timer.reset();
-            cursor_timer.reset();
+            init_everything();
             // Main Loop
             while (running)
             {
@@ -2890,686 +3547,19 @@ WinMain(HINSTANCE Instance,
                     DispatchMessageA(&Message);
                 }
 
-                // get mouse input
-                prev_mouse_coords = mouse_coords;
-                if (GetCursorPos(&mouse_coords))
-                    if (ScreenToClient(wnd, &mouse_coords))
-                    {
-                    }
-                    else
-                        OutputDebugStringA("Error while getting mouse coor rel to client area\n");
-                else
-                    OutputDebugStringA("Error while getting mouse coor rel to screen\n");
-                
-                if (mouse_coords.x > screen_zone.w || mouse_coords.x < 0 || mouse_coords.y < 0 || mouse_coords.y > screen_zone.h)
-                    my_mouse = initial_mouse;
-
-                static bool didid = true;
-                if (show_map)
-                {
-                    sh_hide_zone = hide.scr_zone;
-                    map_zone = region_slct_zone;
-                    if(!didid)
-                    {
-                        OutputDebugStringA(" sh = hide \n");
-                        didid = true;
-                    }
-                }
-                else
-                {
-                    sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
-                    if(didid)
-                    {
-                        OutputDebugStringA("sh = anti_hide \n");
-                        didid = false;
-                    }
-                }
-                
-                if (normal_mode || gif_saving)
-                {
-                    // grid and region_select dragging
-                    if (my_mouse.l_down && !zooming)
-                    {
-                        if (mov_region)
-                        {
-                            if (in_zone(mouse_coords, region_slct_zone))
-                            {
-                                // regulating the size adjusting for ratio problms
-                                bmp_region_zone.h = std::ceil(bmp_zone.h * float(map_cell_w) / cell_h);
-                                bmp_region_zone.w = std::ceil(bmp_zone.w * float(map_cell_w) / cell_w);
-
-                                // update region position
-                                bmp_region_zone.x = region_pos0.x + mouse_coords.x - mouse_coords_ldown.x;
-                                bmp_region_zone.y = region_pos0.y + mouse_coords.y - mouse_coords_ldown.y;
-                                
-                                // assert limits and change map_pos accordingly
-                                if (bmp_region_zone.x <= region_slct_zone.x)
-                                {
-                                    if (map_pos.x > 0)
-                                        map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
-                                    bmp_region_zone.x = region_slct_zone.x;
-                                }
-                                if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                                {
-                                    if (map_pos.x + map_w < nb_cell_w * map_cell_w)
-                                        map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
-                                    bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
-                                }
-                                if (bmp_region_zone.y <= region_slct_zone.y)
-                                {
-                                    if (map_pos.y > 0)
-                                        map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
-                                    bmp_region_zone.y = region_slct_zone.y;
-                                }
-                                if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                                {
-                                    if (map_pos.y + map_h < nb_cell_h * map_cell_w)
-                                    {
-                                        map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
-                                    }
-                                    bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
-                                }
-
-                                // update bitmap_pos and assert limits
-                                bmp_zone.x = (bmp_region_zone.x + map_pos.x - region_slct_zone.x) * int(cell_w / map_cell_w);
-                                bmp_zone.y = (bmp_region_zone.y + map_pos.y - region_slct_zone.y) * int(cell_w / map_cell_w);                                
-                                make_inside(bmp_zone, vbmp_zone);
-
-                            }
-                        }
-                        else if (!in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
-                        {
-                            bmp_zone.x -= (mouse_coords.x - prev_mouse_coords.x) / zoom_ratio_x;
-                            bmp_zone.y -= (mouse_coords.y - prev_mouse_coords.y) / zoom_ratio_y;
-                            make_inside(bmp_zone, vbmp_zone);
-                        }
-                    }
-
-                    // handling zoom smoothness
-                    if (bmp_zone.w != bmp_zone_targ.w || bmp_zone.h != bmp_zone_targ.h)
-                    {
-                        int zoom_sign = zoom_in ? -1 : 1;
-                        bmp_zone.w += zoom_sign * zoom_speed * frame_dur;
-                        bmp_zone.h = (bmp_zone.w / screen_zone.w) * screen_zone.h;
-
-                        bmp_zone.x += -zoom_sign * pos_zpeed_x * frame_dur;
-                        bmp_zone.y += -zoom_sign * pos_zpeed_y * frame_dur;
-                        if (zoom_in)
-                        {
-                            if (bmp_zone.w < bmp_zone_targ.w)
-                            {
-                                bmp_zone.w = bmp_zone_targ.w;
-                                bmp_zone.x = bmp_zone_targ.x;
-                                zooming = false;
-                            }
-                            if (bmp_zone.h < bmp_zone_targ.h)
-                            {
-                                bmp_zone.h = bmp_zone_targ.h;
-                                bmp_zone.y = bmp_zone_targ.y;
-                                zooming = false;
-                            }
-                        }
-                        else
-                        {
-                            if (bmp_zone.w > bmp_zone_targ.w)
-                            {
-                                bmp_zone.w = bmp_zone_targ.w;
-                                bmp_zone.x = bmp_zone_targ.x;
-                                zooming = false;
-
-                            }
-                            if (bmp_zone.h > bmp_zone_targ.h)
-                            {
-                                bmp_zone.h = bmp_zone_targ.h;
-                                bmp_zone.y = bmp_zone_targ.y;
-                                zooming = false;
-                            }
-                        }
-                        zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
-                        zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
-                        make_inside(bmp_zone, vbmp_zone);
-                    }
-
-                    // change region_pos after zoom and dragging handled
-                    if (!mov_region)
-                    {
-                        bmp_region_zone.x = bmp_zone.x * map_cell_w / cell_w - map_pos.x + region_slct_zone.x;
-                        bmp_region_zone.y = bmp_zone.y * map_cell_w / cell_w - map_pos.y + region_slct_zone.y;
-                        if (bmp_region_zone.x <= region_slct_zone.x)
-                        {
-                            if (map_pos.x > 0)
-                                map_pos.x = max(0, map_pos.x - (region_slct_zone.x - bmp_region_zone.x));
-                            bmp_region_zone.x = region_slct_zone.x;
-                        }
-                        if (bmp_region_zone.x + bmp_region_zone.w >= region_slct_zone.x + region_slct_zone.w)
-                        {
-                            if (map_pos.x + map_w < nb_cell_w * map_cell_w)
-                                map_pos.x = min(nb_cell_w * map_cell_w - map_w, map_pos.x + bmp_region_zone.x + bmp_region_zone.w - (region_slct_zone.x + region_slct_zone.w));
-                            bmp_region_zone.x = region_slct_zone.x + region_slct_zone.w - bmp_region_zone.w;
-                        }
-                        if (bmp_region_zone.y <= region_slct_zone.y)
-                        {
-                            if (map_pos.y > 0)
-                                map_pos.y = max(0, map_pos.y - region_slct_zone.y - bmp_region_zone.y);
-                            bmp_region_zone.y = region_slct_zone.y;
-                        }
-                        if (bmp_region_zone.y + bmp_region_zone.h >= region_slct_zone.y + region_slct_zone.h)
-                        {
-                            if (map_pos.y + map_h < nb_cell_h * map_cell_w)
-                                map_pos.y = min(nb_cell_h * map_cell_w - map_h, map_pos.y + bmp_region_zone.y + bmp_region_zone.h - (region_slct_zone.y + region_slct_zone.h));
-                            bmp_region_zone.y = region_slct_zone.y + region_slct_zone.h - bmp_region_zone.h;
-                        }
-                        if(bmp_zone.x == nb_cell_w * cell_w - bmp_zone.w && int(bmp_zone.w)%cell_w != 0)
-                            bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w + 1;
-                        else 
-                            bmp_region_zone.w = bmp_zone.w * map_cell_w / cell_w;
-                        if (bmp_zone.y == nb_cell_h * cell_h - bmp_zone.h && int(bmp_zone.h) % cell_h != 0)
-                            bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h + 1;
-                        else
-                            bmp_region_zone.h = bmp_zone.h * map_cell_w / cell_h;
-                    }
-                   
-                    if (normal_mode)
-                    {
-                        if (int_bar_slctd)
-                        {
-                            intens_slct.scr_zone.x = mouse_coords.x - intens_slct.scr_zone.w / 2;
-                            if (mouse_coords.x >= intens_bar.scr_zone.x + intens_bar.scr_zone.w)
-                                intens_slct.scr_zone.x = intens_bar.scr_zone.x + intens_bar.scr_zone.w - intens_slct.scr_zone.w / 2;
-                            if (mouse_coords.x <= intens_bar.scr_zone.x)
-                                intens_slct.scr_zone.x = intens_bar.scr_zone.x - intens_slct.scr_zone.w / 2;
-                        }
-                        sim_freq = double(5 * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x)) / intens_bar.scr_zone.w + 1;
-                        if (!go_mode)
-                            step_dur = 1.0 / sim_freq;
-
-                        // mouse activation of grid cells + menu zone interaction
-                        if (my_mouse.r_down && !go_mode)
-                        {
-                            if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords, map_zone) && !in_zone(mouse_coords, sh_hide_zone))
-                            {
-                                static int last_i;
-                                static int last_j;
-                                point act_cell = get_clk_cell(mouse_coords);
-                                int i = act_cell.x;
-                                int j = act_cell.y;
-                                if (i != last_i || j != last_j)
-                                {
-                                    if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
-                                    {
-                                        if (!grid[j * nb_cell_w + i])
-                                            grid_init_stt.push_back(point{ i, j });
-                                        else
-                                            grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
-                                        if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
-                                            grid[j * nb_cell_w + i] = !grid[j * nb_cell_w + i];
-                                        if (grid[j * nb_cell_w + i])
-                                        {
-                                            if (i < left_lim)
-                                                left_lim = i;
-                                            else if (i > right_lim)
-                                                right_lim = i;
-                                            if (j < top_lim)
-                                                top_lim = j;
-                                            else if (j > bottom_lim)
-                                                bottom_lim = j;
-                                        }
-                                    }
-                                    top_lim0 = top_lim;
-                                    left_lim0 = left_lim;
-                                    right_lim0 = right_lim;
-                                    bottom_lim0 = bottom_lim;
-                                }
-                                last_i = i;
-                                last_j = j;
-                            }
-                        }
-                        step_edit.handle_slct();
-                        my_cursor.scr_zone.x = step_edit.chars_x[step_edit.curs_idx] - step_edit.dx_ref;
-
-                        // play button click = simulation on => stepping ahead with given velocity
-                        if (sim_on)
-                        {
-                            if (sim_timer.total >= step_dur)
-                            {
-                                sim_timer.reset();
-                                one_step_ahead();
-                            }
-                        }
-
-                        // handle go button click (order important with sim_on so when target equals actual handling sim_on = true doesn't change it)
-                        if (go_butt_clkd)
-                        {
-                            go_mode = true;
-                            target_step = get_step_int();
-                            sim_on = true;
-                            step_dur = 0;
-                            if (target_step < prv_targ_stp || target_step < actual_step)
-                            {
-                                reinit_grid();
-                                actual_step = 0;
-                            }
-                        }
-                    }
-                    if (gif_saving)
-                    {
-                        if (gif_params_collect)
-                        {
-                            for(int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
-                            {
-                                gif_params_dlg.txt_edits[i].handle_slct();
-                            }
-                            txt_edit_params& temp = gif_params_dlg.txt_edits[gif_params_dlg.slctd_edit];
-                            my_cursor.scr_zone.x = temp.chars_x[temp.curs_idx] - temp.dx_ref;
-                        }
-                    }
-                }
-                else if(open_file) // show the open file window
-                {
-                    // handling left mouse down
-                    if (my_mouse.l_down)
-                    {
-                        if (opnf_dlg.scrl_exist)
-                        {
-                            if (opnf_dlg.scrl.drag)
-                            {
-                                opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.y0 + mouse_coords.y - mouse_coords_ldown.y;
-                                opnf_dlg.fhref = opnf_dlg.exp_zone.y - (opnf_dlg.scrl.scrler_zone.y - opnf_dlg.scrl.zone.y) * opnf_dlg.scrl.ratio;
-                            }
-                            else if (opnf_dlg.scrl.timer.total > 0.3)
-                            {
-                                if (in_zone(mouse_coords, opnf_dlg.scrl.up_zone) && in_zone(mouse_coords_ldown, opnf_dlg.scrl.up_zone))
-                                {
-                                    opnf_dlg.fhref += opnf_dlg.file_h;
-                                    opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.zone.y + (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.scrl.ratio;
-                                }
-                                else if (in_zone(mouse_coords, opnf_dlg.scrl.down_zone) && in_zone(mouse_coords_ldown, opnf_dlg.scrl.down_zone))
-                                {
-                                    opnf_dlg.fhref -= opnf_dlg.file_h;
-                                    opnf_dlg.scrl.scrler_zone.y = opnf_dlg.scrl.zone.y + (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.scrl.ratio;
-                                }
-                                else if (opnf_dlg.scrl.attrct)
-                                {
-                                    if (in_zone(mouse_coords, opnf_dlg.scrl.zone) && !in_zone(mouse_coords, opnf_dlg.scrl.scrler_zone))
-                                    {
-                                        int new_dir = (opnf_dlg.scrl.scrler_zone.y - mouse_coords.y > 0) ? -1 : 1;
-                                        if (new_dir == opnf_dlg.scrl.dir)
-                                        {
-                                            opnf_dlg.scrl.scrler_zone.y += opnf_dlg.scrl.dir * opnf_dlg.scrl.scrler_zone.h * 0.7;
-                                            opnf_dlg.fhref = opnf_dlg.exp_zone.y - (opnf_dlg.scrl.scrler_zone.y - opnf_dlg.scrl.zone.y) * opnf_dlg.scrl.ratio;
-                                        }
-                                    }
-                                }
-                            }
-                            make_inside(opnf_dlg.scrl.scrler_zone.y, opnf_dlg.scrl.zone.y, opnf_dlg.scrl.zone.y + opnf_dlg.scrl.zone.h - opnf_dlg.scrl.scrler_zone.h);
-                            make_inside(opnf_dlg.fhref, opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h - (opnf_dlg.nb_files + 2) * opnf_dlg.file_h, opnf_dlg.exp_zone.y);
-                        }
-                    }
-                }
-                else if (save_file)
-                {
-                    // handling left mouse down
-                    if (my_mouse.l_down)
-                    {
-                        if (savf_dlg.scrl_exist)
-                        {
-                            if (savf_dlg.scrl.drag)
-                            {
-                                savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.y0 + mouse_coords.y - mouse_coords_ldown.y;
-                                savf_dlg.fhref = savf_dlg.exp_zone.y - (savf_dlg.scrl.scrler_zone.y - savf_dlg.scrl.zone.y) * savf_dlg.scrl.ratio;
-                            }
-                            else if (savf_dlg.scrl.timer.total > 0.3)
-                            {
-                                if (in_zone(mouse_coords, savf_dlg.scrl.up_zone) && in_zone(mouse_coords_ldown, savf_dlg.scrl.up_zone))
-                                {
-                                    savf_dlg.fhref += savf_dlg.file_h;
-                                    savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.zone.y + (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.scrl.ratio;
-                                }
-                                else if (in_zone(mouse_coords, savf_dlg.scrl.down_zone) && in_zone(mouse_coords_ldown, savf_dlg.scrl.down_zone))
-                                {
-                                    savf_dlg.fhref -= savf_dlg.file_h;
-                                    savf_dlg.scrl.scrler_zone.y = savf_dlg.scrl.zone.y + (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.scrl.ratio;
-                                }
-                                else if (savf_dlg.scrl.attrct)
-                                {
-                                    if (in_zone(mouse_coords, savf_dlg.scrl.zone) && !in_zone(mouse_coords, savf_dlg.scrl.scrler_zone))
-                                    {
-                                        int new_dir = (savf_dlg.scrl.scrler_zone.y - mouse_coords.y > 0) ? -1 : 1;
-                                        if (new_dir == savf_dlg.scrl.dir)
-                                        {
-                                            savf_dlg.scrl.scrler_zone.y += savf_dlg.scrl.dir * savf_dlg.scrl.scrler_zone.h * 0.7;
-                                            savf_dlg.fhref = savf_dlg.exp_zone.y - (savf_dlg.scrl.scrler_zone.y - savf_dlg.scrl.zone.y) * savf_dlg.scrl.ratio;
-                                        }
-                                    }
-                                }
-                            }
-                            make_inside(savf_dlg.scrl.scrler_zone.y, savf_dlg.scrl.zone.y, savf_dlg.scrl.zone.y + savf_dlg.scrl.zone.h - savf_dlg.scrl.scrler_zone.h);
-                            make_inside(savf_dlg.fhref, savf_dlg.exp_zone.y + savf_dlg.exp_zone.h - (savf_dlg.nb_files + 2) * savf_dlg.file_h, savf_dlg.exp_zone.y);
-                        }
-                    }
-                    savf_dlg.txt_edit.handle_slct();
-                    my_cursor.scr_zone.x = savf_dlg.txt_edit.chars_x[savf_dlg.txt_edit.curs_idx] - savf_dlg.txt_edit.dx_ref;
-                }
- 
-                
-                
-                
-                
-                
-                
-                
-                
-                // DRAWING
-                if(normal_mode || gif_saving)
-                {
-                    // grid drawing 
-                    draw_bgnd_color(black);
-                    int i = 1;
-                    int line_x = 0;
-                    while (line_x < screen_zone.w)
-                    {
-                        line_x = ((int(bmp_zone.x / cell_w) + i) * cell_w - bmp_zone.x) * zoom_ratio_x;
-                        draw_color_to_zone(white, { line_x, 0, 2, screen_zone.h });
-                        i++;
-                    }
-                    i = 1;
-                    int line_y = 0;
-                    while (line_y < screen_zone.h)
-                    {
-                        line_y = ((int(bmp_zone.y / cell_w) + i) * cell_w - bmp_zone.y) * zoom_ratio_y;
-                        draw_color_to_zone(white, { 0,line_y, screen_zone.w, 2 });
-                        i++;
-                    }
-
-                    // updating the state of bitmap
-                    for (int i = int(bmp_zone.x / cell_w); i < int((bmp_zone.x + bmp_zone.w) / cell_w) + 1; i++)
-                    {
-                        for (int j = int(bmp_zone.y / cell_h); j < int((bmp_zone.y + bmp_zone.h) / cell_h) + 1; j++)
-                        {
-                            recta zone = { i * cell_w, j * cell_h , cell_w, cell_h };
-
-                            int scr_cell_x = (zone.x - bmp_zone.x) * zoom_ratio_x;
-                            int scr_cell_y = (zone.y - bmp_zone.y) * zoom_ratio_y;
-                            int scr_cell_w = int((zone.x + cell_w - bmp_zone.x) * zoom_ratio_x) - scr_cell_x - 2;
-                            int scr_cell_h = int((zone.y + cell_h - bmp_zone.y) * zoom_ratio_y) - scr_cell_y - 2;
-
-                            recta in_bmp_zone = { scr_cell_x + 2, scr_cell_y + 2, scr_cell_w,  scr_cell_h };
-                            if (grid[j * nb_cell_w + i])
-                                draw_color_to_zone(light, in_bmp_zone);
-                        }
-                    }
-
-                    // menu zone drawing 
-                    draw_color_to_zone(ll_grey, menu_zone);
-                    draw_out_recta({ menu_zone.x, menu_zone.y, menu_zone.w, menu_zone.h }, ld_blue, 4);
-                    draw_out_recta({ menu_zone.x , menu_zone.y , menu_zone.w , menu_zone.h }, grey, 2);
-
-                    draw_out_recta(intens_bar.scr_zone, black, 2);
-                    draw_out_recta(step_edit.zone, grey, 3);
-                    //draw_text_to_zone(, , true, grey);
-                    //draw_text_to_zone("simulation velocity", sim_vel_zone, true, grey);
-                    draw_text_cntrd_fit(cascadia_face, L"Go To Step", go_to_stp_zone, { 0, -go_to_stp_zone.h, 0, 0 });
-                    draw_text_cntrd_fit(cascadia_face, L"Simulation Velocity", sim_vel_zone, { 0, -sim_vel_zone.h, 0, 0 });
-                    draw_butt(save_butt_zone, L"SAVE", save_butt_zone.w / 16);
-                    draw_butt(open_butt_zone, L"OPEN", open_butt_zone.w / 16);
-                    draw_butt(clear_butt_zone, L"CLEAR", clear_butt_zone.w / 16);
-                    draw_butt(go_butt_zone, L"GO", go_butt_zone.w * 7 / 24);
-
-                    draw_actual_step();
-
-                    // map drawing
-                    if (show_map)
-                    {
-                        draw_region_slct();
-                        draw_im(hide);
-                    }
-                    else
-                    {
-                        draw_im(anti_hide);
-                        int pw = 60;
-                        recta panel_zone = { anti_hide.scr_zone.x - pw, anti_hide.scr_zone.y, pw, anti_hide.h };
-                        draw_color_to_zone(ld_blue, panel_zone);
-                        draw_text_to_zone(L"map", { panel_zone.x + 3, panel_zone.y + 3, panel_zone.w - 6, panel_zone.h - 6 }, true, black);
-                    }
-
-                    // play, pause, reinit, go, next buttons
-                    if (sim_on || go_mode)
-                    {
-                        if (!plpau_down)
-                        {
-                            if (in_zone(mouse_coords, pause_butt[0].scr_zone))
-                                instrch_from_im(pause_butt[1], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
-                            else
-                                instrch_from_im(pause_butt[0], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
-                        }
-                        else
-                            instrch_from_im(pause_butt[2], { 0,0,pause_butt[0].w, pause_butt[0].h }, pause_butt[0].scr_zone);
-                    }
-                    else
-                    {
-                        if (!plpau_down)
-                        {
-                            if (in_zone(mouse_coords, play_butt[0].scr_zone))
-                                instrch_from_im(play_butt[1], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
-                            else
-                                instrch_from_im(play_butt[0], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
-                        }
-                        else
-                            instrch_from_im(play_butt[2], { 0,0,play_butt[0].w, play_butt[0].h }, play_butt[0].scr_zone);
-                    }
-
-                    if (!reinit_down)
-                        if (in_zone(mouse_coords, reinit_butt[0].scr_zone))
-                            instrch_from_im(reinit_butt[1], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
-                        else
-                            instrch_from_im(reinit_butt[0], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
-                    else
-                        instrch_from_im(reinit_butt[2], { 0,0,reinit_butt[0].w, reinit_butt[0].h }, reinit_butt[0].scr_zone);
-                    if (!next_down)
-                        if (in_zone(mouse_coords, next_butt[0].scr_zone))
-                            instrch_from_im(next_butt[1], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
-                        else
-                            instrch_from_im(next_butt[0], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
-                    else
-                        instrch_from_im(next_butt[2], { 0,0,next_butt[0].w, next_butt[0].h }, next_butt[0].scr_zone);
-
-                    draw_color_to_zone(slct_color, { intens_bar.scr_zone.x, intens_bar.scr_zone.y, intens_slct.scr_zone.x - intens_bar.scr_zone.x , intens_bar.scr_zone.h });
-                    instrch_from_im(intens_slct, { 0,0,intens_slct.w, intens_slct.h }, intens_slct.scr_zone);
-                    draw_sim_vel();
-                    if(normal_mode)
-                    {
-                        step_edit.draw();
-                    }
-                    if (gif_saving)
-                    {
-                        if (gif_slct_mode)
-                        {
-                            int x = mouse_coords.x;
-                            int y = mouse_coords.y;
-                            int x0 = mouse_coords_rdown.x;
-                            int y0 = mouse_coords_rdown.y;
-                            int mi_x = min(x, x0), mi_y = min(y, y0), ma_x = max(x, x0), ma_y = max(y, y0);
-                            draw_recta({ mi_x, mi_y, ma_x - mi_x + 1, ma_y - mi_y + 1 }, l_blue, 2);
-                        }
-                        else if (gif_params_collect)
-                        {
-                            draw_diag_mesh(grey, 5);
-                            gif_params_dlg.draw();
-                            for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
-                            {
-                                gif_params_dlg.txt_edits[i].draw();
-                            }
-                        }
-                    }
-                }
-                else if (open_file)
-                {
-                    // draw bakgnd colors and outlines
-                    draw_color_to_zone(ll_grey, opnf_dlg.zone);
-                    draw_out_recta(opnf_dlg.zone, l_grey, 4);
-                    draw_out_recta(opnf_dlg.exp_zone, black, 2);
-
-                    // draw open cancel buttons
-                    draw_butt(opnf_dlg.open_zone, L"OPEN", opnf_dlg.open_zone.w / 5);
-                    draw_butt(opnf_dlg.cancel_zone, L"CANCEL", opnf_dlg.cancel_zone.w / 10);
-                    if (my_mouse.l_down)
-                    {
-                        if (in_zone(mouse_coords_ldown, opnf_dlg.cancel_zone) && in_zone(mouse_coords, opnf_dlg.cancel_zone))
-                        {
-                            draw_out_recta(opnf_dlg.cancel_zone, black, 4);
-                        }
-                        if (in_zone(mouse_coords_ldown, opnf_dlg.open_zone) && in_zone(mouse_coords, opnf_dlg.open_zone))
-                        {
-                            draw_out_recta(opnf_dlg.open_zone, black, 4);
-                        }
-                    }
-
-                    // hovered and selected file hilighting
-                    if (in_zone(mouse_coords, opnf_dlg.exp_zone))
-                    {
-                        int idx_hilit = ((opnf_dlg.exp_zone.y - opnf_dlg.fhref) + (mouse_coords.y - opnf_dlg.exp_zone.y)) / opnf_dlg.file_h;
-                        if (idx_hilit < opnf_dlg.nb_files)
-                            draw_color_to_zone(lg_blue, { opnf_dlg.exp_zone.x, opnf_dlg.fhref + idx_hilit * opnf_dlg.file_h, opnf_dlg.exp_zone.w, opnf_dlg.file_h }, opnf_dlg.exp_zone);
-                    }
-                    if (opnf_dlg.fslctd_idx != -1)
-                    {
-                        draw_color_to_zone(ldg_blue, { opnf_dlg.exp_zone.x, opnf_dlg.fhref + opnf_dlg.fslctd_idx * opnf_dlg.file_h, opnf_dlg.exp_zone.w, opnf_dlg.file_h }, opnf_dlg.exp_zone);
-                    }
-
-                    // draw file names
-                    int icon_w = opnf_dlg.file_h;
-                    for (int i = (opnf_dlg.exp_zone.y - opnf_dlg.fhref) / opnf_dlg.file_h; i < opnf_dlg.nb_files; i++)
-                    {
-                        int row_y = opnf_dlg.fhref + i * opnf_dlg.file_h;
-                        if (row_y > opnf_dlg.exp_zone.y + opnf_dlg.exp_zone.h)
-                            break;
-                        if (opnf_dlg.files_q[i].second)
-                            instrch_from_im(folder_icon, { 0,0,folder_icon.w, folder_icon.h }, { opnf_dlg.exp_zone.x, row_y, icon_w, opnf_dlg.file_h }, false, black, opnf_dlg.exp_zone);
-                        draw_text_ft(cascadia_face, opnf_dlg.files_q[i].first, { opnf_dlg.exp_zone.x + icon_w, row_y, opnf_dlg.exp_zone.w - icon_w, opnf_dlg.file_h }, opnf_dlg.exp_zone, { 0, opnf_dlg.file_h * 11 / 36, 0, opnf_dlg.file_h * 11 / 36 });
-                    }
-
-                    // add scroll bar when necessary
-                    if (opnf_dlg.scrl_exist)
-                    {
-                        draw_out_recta(opnf_dlg.scrl.zone, black, 2);
-                        if (opnf_dlg.scrl.drag)
-                            draw_color_to_zone(grey, opnf_dlg.scrl.scrler_zone);
-                        else
-                            draw_color_to_zone(l_grey, opnf_dlg.scrl.scrler_zone);
-
-                        draw_out_recta(opnf_dlg.scrl.up_zone, black, 2);
-                        draw_out_recta(opnf_dlg.scrl.down_zone, black, 2);
-                        int up_ind = in_zone(mouse_coords, opnf_dlg.scrl.up_zone) ? 1 : 0;
-                        instrch_from_im(scrl_up[up_ind], { 0,0,scrl_up[up_ind].w, scrl_up[up_ind].h }, opnf_dlg.scrl.up_zone);
-                        int down_ind = in_zone(mouse_coords, opnf_dlg.scrl.down_zone) ? 1 : 0;
-                        instrch_from_im(scrl_down[down_ind], { 0,0,scrl_down[down_ind].w, scrl_down[down_ind].h }, opnf_dlg.scrl.down_zone);
-                    }
-                }
-                else if (f_error_dlg)
-                {
-                    opn_wrong_f.draw();
-                }
-                else if (save_file)
-                {
-                    // draw bakgnd colors and outlines
-                    draw_color_to_zone(ll_grey, savf_dlg.zone);
-                    draw_out_recta(savf_dlg.zone, l_grey, 4);
-                    draw_out_recta(savf_dlg.exp_zone, black, 2);
-                    draw_out_recta(savf_dlg.txt_edit.zone, black, 2);
-                    // draw open cancel buttons
-                    draw_butt(savf_dlg.open_zone, L"SAVE", savf_dlg.open_zone.w / 5);
-                    draw_butt(savf_dlg.cancel_zone, L"CANCEL", savf_dlg.cancel_zone.w / 10);
-                    
-                    // handling left mouse down
-                    if (my_mouse.l_down)
-                    {
-                        if (in_zone(mouse_coords_ldown, savf_dlg.cancel_zone) && in_zone(mouse_coords, savf_dlg.cancel_zone))
-                        {
-                            draw_out_recta(savf_dlg.cancel_zone, black, 4);
-                        }
-                        if (in_zone(mouse_coords_ldown, savf_dlg.open_zone) && in_zone(mouse_coords, savf_dlg.open_zone))
-                        {
-                            draw_out_recta(savf_dlg.open_zone, black, 4);
-                        }
-                    }
-
-                    // hovered and selected file hilighting
-                    if (in_zone(mouse_coords, savf_dlg.exp_zone))
-                    {
-                        int idx_hilit = ((savf_dlg.exp_zone.y - savf_dlg.fhref) + (mouse_coords.y - savf_dlg.exp_zone.y)) / savf_dlg.file_h;
-                        if (idx_hilit < savf_dlg.nb_files)
-                            draw_color_to_zone(lg_blue, { savf_dlg.exp_zone.x, savf_dlg.fhref + idx_hilit * savf_dlg.file_h, savf_dlg.exp_zone.w, savf_dlg.file_h }, savf_dlg.exp_zone);
-                    }
-                    if (savf_dlg.fslctd_idx != -1)
-                    {
-                        draw_color_to_zone(ldg_blue, { savf_dlg.exp_zone.x, savf_dlg.fhref + savf_dlg.fslctd_idx * savf_dlg.file_h, savf_dlg.exp_zone.w, savf_dlg.file_h }, savf_dlg.exp_zone);
-                    }
-
-                    // draw file names
-                    int icon_w = savf_dlg.file_h;
-                    for (int i = (savf_dlg.exp_zone.y - savf_dlg.fhref) / savf_dlg.file_h; i < savf_dlg.nb_files; i++)
-                    {
-                        int row_y = savf_dlg.fhref + i * savf_dlg.file_h;
-                        if (row_y > savf_dlg.exp_zone.y + savf_dlg.exp_zone.h)
-                            break;
-                        if (savf_dlg.files_q[i].second)
-                            instrch_from_im(folder_icon, { 0,0,folder_icon.w, folder_icon.h }, { savf_dlg.exp_zone.x, row_y , icon_w, savf_dlg.file_h - savf_dlg.file_h * 17 / 80 }, false, black, savf_dlg.exp_zone);
-                        draw_text_ft(cascadia_face, savf_dlg.files_q[i].first, { savf_dlg.exp_zone.x + icon_w, row_y, savf_dlg.exp_zone.w - icon_w, savf_dlg.file_h }, savf_dlg.exp_zone, { 0, savf_dlg.file_h * 17 / 80, 0, savf_dlg.file_h * 17 / 80 });
-                    }
-
-                    // add scroll bar when necessary
-                    if (savf_dlg.scrl_exist)
-                    {
-                        draw_out_recta(savf_dlg.scrl.zone, black, 2);
-                        if (savf_dlg.scrl.drag)
-                            draw_color_to_zone(grey, savf_dlg.scrl.scrler_zone);
-                        else
-                            draw_color_to_zone(l_grey, savf_dlg.scrl.scrler_zone);
-
-                        draw_out_recta(savf_dlg.scrl.up_zone, black, 2);
-                        draw_out_recta(savf_dlg.scrl.down_zone, black, 2);
-                        int up_ind = in_zone(mouse_coords, savf_dlg.scrl.up_zone) ? 1 : 0;
-                        instrch_from_im(scrl_up[up_ind], { 0,0,scrl_up[up_ind].w, scrl_up[up_ind].h }, savf_dlg.scrl.up_zone);
-                        int down_ind = in_zone(mouse_coords, savf_dlg.scrl.down_zone) ? 1 : 0;
-                        instrch_from_im(scrl_down[down_ind], { 0,0,scrl_down[down_ind].w, scrl_down[down_ind].h }, savf_dlg.scrl.down_zone);
-                    }
-                    savf_dlg.txt_edit.draw();
-                }
-                else if (gif_sav_info)
-                {
-                    gif_slct_info.draw();
-                }
-
-                if (show_cursor)
-                {
-                    if (cursor_timer.total <= 0.8)
-                    {
-                        instrch_from_im(my_cursor, { 0,0,my_cursor.w, my_cursor.h }, my_cursor.scr_zone, false, black);
-                    }
-                    if (cursor_timer.total >= 1.6)
-                        cursor_timer.reset();
-                }
-
-                my_mouse.l_clk = false;
-                go_butt_clkd = false;
+                update_app_params();
+                update_back_buffer();
 
                 // respecting the frame rate
                 frame_timer.tick();
                 if (frame_timer.dt < frame_dur )
                     Sleep((frame_dur - frame_timer.dt) * 1000);
 
-                HDC device_context = GetDC(wnd);
+                HDC device_context = GetDC(main_wnd);
                 RECT client_rect;
-                GetClientRect(wnd, &client_rect);
+                GetClientRect(main_wnd, &client_rect);
                 update_wnd(device_context, &client_rect);
-                ReleaseDC(wnd, device_context);
-                
-                if(actual_step == target_step)
-                {
-                    prv_targ_stp = target_step;
-                    sim_on = false;
-                    go_mode = false;
-                }
+                ReleaseDC(main_wnd, device_context);
                 
                 opnf_dlg.scrl.timer.tick();
                 sim_timer.tick();
