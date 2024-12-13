@@ -1,0 +1,1 @@
+C:\dev\projects\gol\code\freetype-2.13.2\objs\x64\Release Static\freetype.lib
