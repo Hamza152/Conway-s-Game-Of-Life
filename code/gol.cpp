@@ -379,6 +379,7 @@ recta map_zone = { 0,0,0,0 };
 bool open_file = false;
 bool save_file = false;
 bool gif_saving = false;
+bool save_ext_err = false;
 bool gif_sav_info = false;
 bool f_error_dlg = false;
 bool normal_mode = true;
@@ -390,6 +391,7 @@ opn_sav_dlg opnf_dlg;
 opn_sav_dlg savf_dlg;
 info_dlg opn_wrong_f;
 info_dlg gif_slct_info;
+info_dlg ext_err_info;
 collect_dlg gif_params_dlg;
 
 // user input params ----------------------------------
@@ -1095,7 +1097,6 @@ void load_from_file(std::wstring file_name)
     open_file = false;
     actual_step = 0;
     my_file.close();
-    my_mouse.l_down = false;
 }
 
 void make_inside(recta& zone, const recta& limits)
@@ -1736,11 +1737,11 @@ wnd_callback(HWND wnd,
     }break;
     case WM_LBUTTONUP:
     {
-        if(!del_mouse_lup)
+        my_mouse.l_down = false;
+        if (!del_mouse_lup)
         {
             mouse_coords_lup.x = GET_X_LPARAM(lp);
             mouse_coords_lup.y = GET_Y_LPARAM(lp);
-            my_mouse.l_down = false;
             int_bar_slctd = false;
             slct_mode = false;
             go_butt_down = false;
@@ -1876,9 +1877,37 @@ wnd_callback(HWND wnd,
             {
                 if (in_zone(mouse_coords_ldown, savf_dlg.open_zone) && in_zone(mouse_coords_lup, savf_dlg.open_zone))
                 {
-                    if (savf_dlg.fslctd_idx != -1 && savf_dlg.files_q[savf_dlg.fslctd_idx].second)
+                    if (savf_dlg.fslctd_idx != -1)
                     {
-                        savf_dlg.go_slctd_dir();
+                        if (savf_dlg.files_q[savf_dlg.fslctd_idx].second)
+                            savf_dlg.go_slctd_dir();
+                        else
+                        {
+                            std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
+                            if (check_ext(savf_dlg.txt_edit.str, L".gif"))
+                            {
+                                gif_path = file_path;
+                                gif_sav_info = true;
+                                draw_diag_mesh(grey, 5);
+                            }
+                            else
+                            {
+                                std::wofstream my_file;
+                                my_file.open(file_path);
+
+                                if (my_file.is_open())
+                                {
+                                    for (int i = 0; i < nb_cell_w; i++)
+                                        for (int j = 0; j < nb_cell_h; j++)
+                                            my_file << grid[j * nb_cell_w + i] << " ";
+                                }
+                                my_file.close();
+                                normal_mode = true;
+                                my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
+                                step_edit.slct_idx = step_edit.curs_idx = 0;
+                            }
+                            save_file = false;
+                        }
                     }
                     else
                     {
@@ -1889,7 +1918,7 @@ wnd_callback(HWND wnd,
                             gif_sav_info = true;
                             draw_diag_mesh(grey, 5);
                         }
-                        else
+                        else if (check_ext(savf_dlg.txt_edit.str, L".txt"))
                         {
                             std::wofstream my_file;
                             my_file.open(file_path);
@@ -1905,6 +1934,10 @@ wnd_callback(HWND wnd,
                             my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                             step_edit.slct_idx = step_edit.curs_idx = 0;
                         }
+                        else
+                        {
+                            save_ext_err = true;
+                        }
                         save_file = false;
                     }
                 }
@@ -1918,6 +1951,14 @@ wnd_callback(HWND wnd,
 
                 savf_dlg.scrl.drag = false;
                 savf_dlg.scrl.attrct = false;
+            }
+            else if (save_ext_err)
+            {
+                if (in_zone(mouse_coords_ldown, ext_err_info.ok_zone) && in_zone(mouse_coords_lup, ext_err_info.ok_zone))
+                {
+                    save_ext_err = false;
+                    save_file = true;
+                }
             }
             else if (gif_sav_info)
             {
@@ -1943,11 +1984,10 @@ wnd_callback(HWND wnd,
                     normal_mode = true;
                 }
             }
-            PostMessageW(wnd, WM_SETCURSOR, (WPARAM)wnd, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
         }
         else
             del_mouse_lup = false;
-        
+        PostMessageW(wnd, WM_SETCURSOR, (WPARAM)wnd, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
     }break;
     case WM_RBUTTONDOWN:
     {
@@ -2061,15 +2101,17 @@ wnd_callback(HWND wnd,
                     }
                     else
                     {
-                        if (check_ext(savf_dlg.curr_dir, L".gif"))
+                        std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
+                        if (check_ext(savf_dlg.txt_edit.str, L".gif"))
                         {
-                            gif_path = savf_dlg.curr_dir;
+                            gif_path = file_path;
                             gif_sav_info = true;
+                            draw_diag_mesh(grey, 5);
                         }
-                        else // it's txt
+                        else
                         {
                             std::wofstream my_file;
-                            my_file.open(savf_dlg.curr_dir);
+                            my_file.open(file_path);
 
                             if (my_file.is_open())
                             {
@@ -2078,12 +2120,16 @@ wnd_callback(HWND wnd,
                                         my_file << grid[j * nb_cell_w + i] << " ";
                             }
                             my_file.close();
+                            normal_mode = true;
+                            my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
+                            step_edit.slct_idx = step_edit.curs_idx = 0;
+                            del_mouse_lup = true;
                         }
                         save_file = false;
                     }
                 }
             }
-            if(in_zone(mouse_coords_ldown, savf_dlg.txt_edit.zone))
+            else if(in_zone(mouse_coords_ldown, savf_dlg.txt_edit.zone))
             {
                 int i;
                 for (i = savf_dlg.txt_edit.curs_idx; i >= 0; i--)
@@ -2920,6 +2966,10 @@ void update_back_buffer()
         }
         savf_dlg.txt_edit.draw();
     }
+    else if (save_ext_err)
+    {
+        ext_err_info.draw();
+    }
     else if (gif_sav_info)
     {
         gif_slct_info.draw();
@@ -3599,17 +3649,21 @@ void init_everything()
     gif_slct_info.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
     gif_slct_info.title_h = savf_dlg.zone.w / 12;
     gif_slct_info.fill_params(cascadia_face);
-
+    
+    ext_err_info.txt = L"The extension of the file should be \".txt\" or \".gif\"";
+    ext_err_info.title = L"File Type Error";
+    ext_err_info.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
+    ext_err_info.title_h = savf_dlg.zone.w / 12;
+    ext_err_info.fill_params(cascadia_face);
+    
     gif_params_dlg.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
     gif_params_dlg.title = L"Parameters";
     gif_params_dlg.title_h = savf_dlg.zone.w / 12;
     gif_params_dlg.txts.push_back(L"Velocity (generation/second) : ");
     gif_params_dlg.txts.push_back(L"Number of generations : ");
-    gif_params_dlg.txts.push_back(L"added : ");
     gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
     gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 5 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
-    gif_params_dlg.txt_zones.push_back({ gif_params_dlg.zone.x + gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 7 * gif_params_dlg.title_h / 2, 2 * gif_params_dlg.zone.w / 3, 5 * gif_params_dlg.title_h / 12 });
-
+    
     txt_edit_params temp;
     temp.zone = { gif_params_dlg.zone.x + 14 * gif_params_dlg.zone.w / 20, gif_params_dlg.zone.y + 3 * gif_params_dlg.title_h / 2, gif_params_dlg.zone.w / 4, gif_params_dlg.title_h / 2 };
     temp.txt_zone = { temp.zone.x + temp.zone.w / 20, temp.zone.y + temp.zone.h / 8  , temp.zone.w - temp.zone.w / 10, 3 * temp.zone.h / 4 };
@@ -3618,9 +3672,6 @@ void init_everything()
     temp.txt_zone.y += gif_params_dlg.title_h;
     gif_params_dlg.txt_edits.push_back(temp);
 
-    temp.zone.y += gif_params_dlg.title_h;
-    temp.txt_zone.y += gif_params_dlg.title_h;
-    gif_params_dlg.txt_edits.push_back(temp);
     gif_params_dlg.fill_params();
 
     // step_edit params 
