@@ -12,6 +12,9 @@
 #include <cwctype>
 #include "gif.h"
 
+#include <dxgi.h>
+#include <d3d11.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -22,6 +25,8 @@
 #define IDM_FILE_EXIT 1002
 #define IDM_FILE_SAVE 1003
 #define DLG_OK_BUTT 1
+#define gpu_acceleration
+#define SAFE_RELEASE(p)      { if (p) { (p)->Release(); (p)=nullptr; } }
 
 typedef int8_t int8;
 typedef int16_t int16;
@@ -244,6 +249,14 @@ struct collect_dlg
     void draw();
 };
 
+struct rect_limits
+{
+    uint32 left;
+    uint32 top;
+    uint32 right;
+    uint32 bottom;
+};
+
 bool running = false;
 
 // files ----------------------------------
@@ -309,8 +322,8 @@ int line_w   = 6;
 int nb_cell_w = 400;
 int nb_cell_h = 400;
 int nb_cells = nb_cell_w * nb_cell_h;
-bool* grid = new bool[nb_cells]();
-bool* futur_grid = new bool[nb_cells]();
+uint32* grid = new uint32[nb_cells]();
+uint32* futur_grid = new uint32[nb_cells]();
 
 // simulation params ----------------------------------
 bool is_step_time = false;
@@ -321,14 +334,7 @@ double step_dur   = 0.5;
 int actual_step   = 0;
 int target_step   = -1;
 int prv_targ_stp  = -1;
-int top_lim = nb_cell_h;
-int left_lim = nb_cell_w;
-int right_lim = 0;
-int bottom_lim = 0;
-int top_lim0 = top_lim;
-int left_lim0 = left_lim;
-int right_lim0 = right_lim;
-int bottom_lim0 = bottom_lim;
+rect_limits stepping_limits, initial_limits;
 std::vector<point> grid_init_stt;
 
 // menu zone params ----------------------------------
@@ -809,52 +815,52 @@ void draw_actual_step()
 
 void one_step_ahead()
 {   
-    int j0 = max(1, top_lim - 1);
-    int i0 = max(1, left_lim - 1);
-    int j_max = min(bottom_lim + 1, nb_cell_h - 2);
-    int i_max = min(right_lim + 1, nb_cell_w - 2);
+    int j0 = max(1, stepping_limits.top - 1);
+    int i0 = max(1, stepping_limits.left - 1);
+    int j_max = min(stepping_limits.bottom + 1, nb_cell_h - 2);
+    int i_max = min(stepping_limits.right + 1, nb_cell_w - 2);
     for (int j = j0; j <= j_max; j++)
     {
         for (int i = i0; i <= i_max; i++)
         {  
             int neigh_alive = 0;
-            neigh_alive += int(grid[(j - 1) * nb_cell_w + i - 1]);
-            neigh_alive += int(grid[j * nb_cell_w + i - 1]);
-            neigh_alive += int(grid[(j + 1) * nb_cell_w + i - 1]);
-            neigh_alive += int(grid[(j - 1) * nb_cell_w + i]);
-            neigh_alive += int(grid[(j + 1) * nb_cell_w + i]);
-            neigh_alive += int(grid[(j - 1) * nb_cell_w + i + 1]);
-            neigh_alive += int(grid[j * nb_cell_w + i + 1]);
-            neigh_alive += int(grid[(j + 1) * nb_cell_w + i + 1]);
+            neigh_alive += grid[(j - 1) * nb_cell_w + i - 1];
+            neigh_alive += grid[j * nb_cell_w + i - 1];
+            neigh_alive += grid[(j + 1) * nb_cell_w + i - 1];
+            neigh_alive += grid[(j - 1) * nb_cell_w + i];
+            neigh_alive += grid[(j + 1) * nb_cell_w + i];
+            neigh_alive += grid[(j - 1) * nb_cell_w + i + 1];
+            neigh_alive += grid[j * nb_cell_w + i + 1];
+            neigh_alive += grid[(j + 1) * nb_cell_w + i + 1];
 
             if (grid[j * nb_cell_w + i])
             {
                 if (neigh_alive < 2 || neigh_alive > 3)
-                    futur_grid[j * nb_cell_w + i] = false;
+                    futur_grid[j * nb_cell_w + i] = 0;
                 else
-                    futur_grid[j * nb_cell_w + i] = true;
+                    futur_grid[j * nb_cell_w + i] = 1;
             }
             else
             {
                 if (neigh_alive == 3)
                 {
-                    futur_grid[j * nb_cell_w + i] = true;
-                    if (i < left_lim)
-                        left_lim = i;
-                    if (i > right_lim)
-                        right_lim = i;
-                    if (j < top_lim)
-                        top_lim = j;
-                    if (j > bottom_lim)
-                        bottom_lim = j;
+                    futur_grid[j * nb_cell_w + i] = 1;
+                    if (i < stepping_limits.left)
+                        stepping_limits.left = i;
+                    if (i > stepping_limits.right)
+                        stepping_limits.right = i;
+                    if (j < stepping_limits.top)
+                        stepping_limits.top = j;
+                    if (j > stepping_limits.bottom)
+                        stepping_limits.bottom = j;
                 }
                 else
-                    futur_grid[j * nb_cell_w + i] = false;
+                    futur_grid[j * nb_cell_w + i] = 0;
 
             }
         }
     }
-    bool* temp;
+    uint32* temp;
     temp = grid;
     grid = futur_grid;
     futur_grid = temp;
@@ -877,21 +883,16 @@ int get_step_int()
 
 void reinit_grid()
 {
-    for (int i = left_lim; i <= right_lim; i++)
-        for (int j = top_lim; j <= bottom_lim ; j++)
+    for (int i = 0; i <nb_cell_w; i++)
+        for (int j = 0; j < nb_cell_h; j++)
         {
-            grid[j * nb_cell_w + i] = false;
-            futur_grid[j * nb_cell_w + i] = false;
-
+            grid[j * nb_cell_w + i] = 0;
+            futur_grid[j * nb_cell_w + i] = 0;
         }
     for (auto square : grid_init_stt)
-        grid[square.y * nb_cell_w + square.x] = true;
+        grid[square.y * nb_cell_w + square.x] = 1;
 
-    top_lim = top_lim0;
-    left_lim = left_lim0;
-    right_lim = right_lim0;
-    bottom_lim = bottom_lim0;
-
+    stepping_limits = initial_limits;
 }
 
 void collect_dlg::draw()
@@ -1038,11 +1039,11 @@ void load_from_file(std::wstring file_name)
     grid_init_stt.clear();
     if (my_file.is_open())
     {
-        top_lim = nb_cell_h;
-        left_lim = nb_cell_w;
-        right_lim = 0;
-        bottom_lim = 0;
-        int k;
+        stepping_limits.top = nb_cell_h;
+        stepping_limits.left = nb_cell_w;
+        stepping_limits.right = 0;
+        stepping_limits.bottom = 0;
+        uint32 k;
         for (int i = 0; i < nb_cell_w; i++)
         {
             for (int j = 0; j < nb_cell_h; j++)
@@ -1055,39 +1056,32 @@ void load_from_file(std::wstring file_name)
                     break;
                 }
                 grid[j * nb_cell_w + i] = (k != 0);
-                futur_grid[j * nb_cell_w + i] = false;
+                futur_grid[j * nb_cell_w + i] = 0;
 
                 if (k)
                 {
-                    if (i < left_lim)
-                        left_lim = i;
-                    else if (i > right_lim)
-                        right_lim = i;
-                    if (j < top_lim)
-                        top_lim = j;
-                    else if (j > bottom_lim)
-                        bottom_lim = j;
+                    if (i < stepping_limits.left)
+                        stepping_limits.left = i;
+                    else if (i > stepping_limits.right)
+                        stepping_limits.right = i;
+                    if (j < stepping_limits.top)
+                        stepping_limits.top = j;
+                    else if (j > stepping_limits.bottom)
+                        stepping_limits.bottom = j;
                     grid_init_stt.push_back(point{ i,j });
                 }
             }
             if (f_error_dlg)
                 break;
         }
-
-        top_lim0 = top_lim;
-        left_lim0 = left_lim;
-        right_lim0 = right_lim;
-        bottom_lim0 = bottom_lim;
+        stepping_limits = initial_limits;
         my_file >> k;
     }
     if (!my_file.eof())
     {
         f_error_dlg = true;
         draw_diag_mesh(grey, 5);
-        top_lim = top_lim0;
-        left_lim = left_lim0;
-        right_lim = right_lim0;
-        bottom_lim = bottom_lim0;
+        stepping_limits = initial_limits;
     }
     else
     {
@@ -1756,7 +1750,7 @@ wnd_callback(HWND wnd,
             mov_region = false;
             if (normal_mode)
             {
-                if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone) && !go_mode)
+                if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
                 {
                     point down_cell = get_clk_cell(mouse_coords_ldown);
                     point up_cell = get_clk_cell(mouse_coords_lup);
@@ -1770,22 +1764,19 @@ wnd_callback(HWND wnd,
                         else
                             grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
                         if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
-                            grid[j * nb_cell_w + i] = !grid[j * nb_cell_w + i];
+                            grid[j * nb_cell_w + i] = grid[j * nb_cell_w + i] ? 0 : 1;
                         if (grid[j * nb_cell_w + i])
                         {
-                            if (i < left_lim)
-                                left_lim = i;
-                            else if (i > right_lim)
-                                right_lim = i;
-                            if (j < top_lim)
-                                top_lim = j;
-                            else if (j > bottom_lim)
-                                bottom_lim = j;
+                            if (i < stepping_limits.left)
+                                stepping_limits.left = i;
+                            else if (i > stepping_limits.right)
+                                stepping_limits.right = i;
+                            if (j < stepping_limits.top)
+                                stepping_limits.top = j;
+                            else if (j > stepping_limits.bottom)
+                                stepping_limits.bottom = j;
                         }
-                        top_lim0 = top_lim;
-                        left_lim0 = left_lim;
-                        right_lim0 = right_lim;
-                        bottom_lim0 = bottom_lim;
+                        initial_limits= stepping_limits;
                     }
                 }
                 else if (in_zone(mouse_coords_ldown, play_butt[0].scr_zone) && in_zone(mouse_coords_lup, play_butt[0].scr_zone))
@@ -1793,7 +1784,6 @@ wnd_callback(HWND wnd,
                     if (sim_on)
                         prv_targ_stp = actual_step;
                     sim_on = !sim_on;
-                    go_mode = false;
                 }
                 else if (in_zone(mouse_coords_ldown, go_butt_zone) && in_zone(mouse_coords_lup, go_butt_zone))
                 {
@@ -1801,8 +1791,7 @@ wnd_callback(HWND wnd,
                     if(target_step != actual_step)
                     {
                         go_mode = true;
-                        sim_on = true;
-                        step_dur = 0;
+                        normal_mode = false;
                         if (target_step < prv_targ_stp || target_step < actual_step)
                         {
                             reinit_grid();
@@ -1812,7 +1801,6 @@ wnd_callback(HWND wnd,
                 }
                 else if (in_zone(mouse_coords_ldown, reinit_butt[0].scr_zone) && in_zone(mouse_coords_lup, reinit_butt[0].scr_zone))
                 {
-                    go_mode = false;
                     sim_on = false;
                     reinit_grid();
                     actual_step = 0;
@@ -1830,6 +1818,7 @@ wnd_callback(HWND wnd,
                 {
                     save_file = true;
                     normal_mode = false;
+                    sim_on = false;
                     get_exe_dir(savf_dlg.curr_dir);
                     savf_dlg.go_curr_dir();
                     my_cursor.scr_zone = { savf_dlg.txt_edit.txt_zone.x, savf_dlg.txt_edit.txt_zone.y, 2, savf_dlg.txt_edit.txt_zone.h };
@@ -1845,7 +1834,6 @@ wnd_callback(HWND wnd,
                 {
                     open_file = true;
                     normal_mode = false;
-                    go_mode = false;
                     sim_on = false;
                     get_exe_dir(opnf_dlg.curr_dir);
                     opnf_dlg.go_curr_dir();
@@ -1910,7 +1898,7 @@ wnd_callback(HWND wnd,
                             {
                                 for (int i = 0; i < nb_cell_w; i++)
                                     for (int j = 0; j < nb_cell_h; j++)
-                                        my_file << int(grid[j * nb_cell_w + i]) << " ";
+                                        my_file << grid[j * nb_cell_w + i] << " ";
                             }
                             my_file.close();
                             normal_mode = true;
@@ -2087,7 +2075,7 @@ wnd_callback(HWND wnd,
                             {
                                 for (int i = 0; i < nb_cell_w; i++)
                                     for (int j = 0; j < nb_cell_h; j++)
-                                        my_file << int(grid[j * nb_cell_w + i]) << " ";
+                                        my_file << grid[j * nb_cell_w + i] << " ";
                             }
                             my_file.close();
                         }
@@ -2443,8 +2431,8 @@ void clear_grid()
     for (int i = 0; i < nb_cell_w; i++)
         for (int j = 0; j < nb_cell_h; j++)
         {
-            grid[j * nb_cell_w + i] = false;
-            futur_grid[j * nb_cell_w + i] = false;
+            grid[j * nb_cell_w + i] = 0;
+            futur_grid[j * nb_cell_w + i] = 0;
         }
     grid_init_stt.clear();
     actual_step = target_step = 0;
@@ -2730,7 +2718,7 @@ void update_back_buffer()
         }
 
         // play, pause, reinit, go, next buttons
-        if (sim_on || go_mode)
+        if (sim_on)
         {
             if (!plpau_down)
             {
@@ -2964,25 +2952,14 @@ void update_app_params()
     if (mouse_coords.x > screen_zone.w || mouse_coords.x < 0 || mouse_coords.y < 0 || mouse_coords.y > screen_zone.h)
         my_mouse = initial_mouse;
 
-    static bool didid = true;
     if (show_map)
     {
         sh_hide_zone = hide.scr_zone;
         map_zone = region_slct_zone;
-        if (!didid)
-        {
-            OutputDebugStringA(" sh = hide \n");
-            didid = true;
-        }
     }
     else
     {
         sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
-        if (didid)
-        {
-            OutputDebugStringA("sh = anti_hide \n");
-            didid = false;
-        }
     }
 
     if (normal_mode || gif_saving)
@@ -3140,11 +3117,10 @@ void update_app_params()
                     intens_slct.scr_zone.x = intens_bar.scr_zone.x - intens_slct.scr_zone.w / 2;
             }
             sim_freq = double(5 * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x)) / intens_bar.scr_zone.w + 1;
-            if (!go_mode)
-                step_dur = 1.0 / sim_freq;
+            step_dur = 1.0 / sim_freq;
 
             // mouse activation of grid cells + menu zone interaction
-            if (my_mouse.r_down && !go_mode)
+            if (my_mouse.r_down)
             {
                 if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords, map_zone) && !in_zone(mouse_coords, sh_hide_zone))
                 {
@@ -3162,23 +3138,20 @@ void update_app_params()
                             else
                                 grid_init_stt.erase(std::remove(grid_init_stt.begin(), grid_init_stt.end(), point({ i,j })), grid_init_stt.end());
                             if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
-                                grid[j * nb_cell_w + i] = !grid[j * nb_cell_w + i];
+                                grid[j * nb_cell_w + i] = grid[j * nb_cell_w + i] ? 0 : 1;
                             if (grid[j * nb_cell_w + i])
                             {
-                                if (i < left_lim)
-                                    left_lim = i;
-                                else if (i > right_lim)
-                                    right_lim = i;
-                                if (j < top_lim)
-                                    top_lim = j;
-                                else if (j > bottom_lim)
-                                    bottom_lim = j;
+                                if (i < stepping_limits.left)
+                                    stepping_limits.left = i;
+                                else if (i > stepping_limits.right)
+                                    stepping_limits.right = i;
+                                if (j < stepping_limits.top)
+                                    stepping_limits.top = j;
+                                else if (j > stepping_limits.bottom)
+                                    stepping_limits.bottom = j;
                             }
                         }
-                        top_lim0 = top_lim;
-                        left_lim0 = left_lim;
-                        right_lim0 = right_lim;
-                        bottom_lim0 = bottom_lim;
+                        initial_limits = stepping_limits;
                     }
                     last_i = i;
                     last_j = j;
@@ -3195,6 +3168,11 @@ void update_app_params()
                     sim_timer.reset();
                     one_step_ahead();
                 }
+            }
+            if (actual_step == target_step)
+            {
+                prv_targ_stp = target_step;
+                sim_on = false;
             }
         }
         if (gif_saving)
@@ -3296,11 +3274,193 @@ void update_app_params()
         savf_dlg.txt_edit.handle_slct();
         my_cursor.scr_zone.x = savf_dlg.txt_edit.chars_x[savf_dlg.txt_edit.curs_idx] - savf_dlg.txt_edit.dx_ref;
     }
-    if (actual_step == target_step)
-    {
-        prv_targ_stp = target_step;
-        sim_on = false;
+	else if (go_mode)
+	{
+#ifdef gpu_acceleration
+        ID3D11Device* pdevice;
+        D3D_FEATURE_LEVEL feat_lvl;
+        ID3D11DeviceContext* pimmediate_context;
+        HRESULT hr = D3D11CreateDevice(NULL,
+            D3D_DRIVER_TYPE_HARDWARE,
+            NULL,
+            D3D11_CREATE_DEVICE_DEBUG,
+            NULL,
+            0,
+            D3D11_SDK_VERSION,
+            &pdevice,
+            &feat_lvl,
+            &pimmediate_context
+        );
+        assert(hr == S_OK);
+        assert(feat_lvl == D3D_FEATURE_LEVEL_11_0);
+
+        std::ifstream fin("compute_sh.o", std::ios::binary);
+        fin.seekg(0, std::ios_base::end);
+        int size = (int)fin.tellg();
+        std::vector<char> compute_sh(size);
+        fin.seekg(0, std::ios_base::beg);
+        fin.read(compute_sh.data(), size);
+        fin.close();
+
+        ID3D11ComputeShader* comp_sh;
+        hr = pdevice->CreateComputeShader(compute_sh.data(), size, 0, &comp_sh);
+        assert(hr == S_OK);
+
+        // buffers description and creation. 
+        D3D11_BUFFER_DESC data_buff_bd;
+        data_buff_bd.ByteWidth = nb_cells * 4;
+        data_buff_bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        data_buff_bd.StructureByteStride = 4;
+        data_buff_bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+        data_buff_bd.Usage = D3D11_USAGE_DEFAULT;
+        data_buff_bd.CPUAccessFlags = 0;
+        D3D11_SUBRESOURCE_DATA data_sbr;
+        data_sbr.pSysMem = grid;
+
+        ID3D11Buffer* first_buff;
+        hr = pdevice->CreateBuffer(&data_buff_bd, &data_sbr, &first_buff);
+        assert(hr == S_OK);
+        ID3D11Buffer* second_buff;
+        hr = pdevice->CreateBuffer(&data_buff_bd, nullptr, &second_buff);
+        assert(hr == S_OK);
+        
+        //limits buffer creation : this is for the new limits of calculation when stepping ahead with CPU
+        D3D11_BUFFER_DESC limits_buff_desc;
+        limits_buff_desc.ByteWidth = 16;
+        limits_buff_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        limits_buff_desc.StructureByteStride = 4;
+        limits_buff_desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+        limits_buff_desc.Usage = D3D11_USAGE_DEFAULT;
+        limits_buff_desc.CPUAccessFlags = 0;
+
+        uint32 limits[4] = { stepping_limits.left, stepping_limits.top, stepping_limits.right, stepping_limits.bottom};
+        ID3D11Buffer* limits_buff = nullptr;
+        D3D11_SUBRESOURCE_DATA limits_sbr;
+        limits_sbr.pSysMem = &limits;
+        pdevice->CreateBuffer(&limits_buff_desc, &limits_sbr, &limits_buff);
+        assert(hr == S_OK);
+
+        // unordered access views creation 
+        D3D11_UNORDERED_ACCESS_VIEW_DESC buff_vdesc;
+        buff_vdesc.Format = DXGI_FORMAT_UNKNOWN;
+        buff_vdesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+        buff_vdesc.Buffer.NumElements = nb_cells;
+        buff_vdesc.Buffer.FirstElement = 0;
+        buff_vdesc.Buffer.Flags = 0;
+
+        ID3D11UnorderedAccessView* first_uav;
+        hr = pdevice->CreateUnorderedAccessView(first_buff, &buff_vdesc, &first_uav);
+        assert(hr == S_OK);
+        ID3D11UnorderedAccessView* second_uav;
+        hr = pdevice->CreateUnorderedAccessView(second_buff, &buff_vdesc, &second_uav);
+        assert(hr == S_OK);
+
+        buff_vdesc.Buffer.NumElements = 4;
+        ID3D11UnorderedAccessView* limits_uav;
+        hr = pdevice->CreateUnorderedAccessView(limits_buff, &buff_vdesc, &limits_uav);
+        assert(hr == S_OK);
+
+        // constant buffer holds a switch to use result as input for next dispath operation 
+        D3D11_BUFFER_DESC cbuff_desc;
+        cbuff_desc.ByteWidth = 16;
+        cbuff_desc.MiscFlags = 0;
+        cbuff_desc.StructureByteStride = 0;
+        cbuff_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbuff_desc.Usage = D3D11_USAGE_DYNAMIC;
+        cbuff_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        struct my_cbuff
+        {
+            uint32 grid_w;
+            uint32 grid_h;
+            uint32 grps_per_dim;
+            uint32 calc_switch;
+        } cbuff_data;
+
+        ID3D11Buffer* switch_buff = nullptr;
+        pdevice->CreateBuffer(&cbuff_desc, nullptr, &switch_buff);
+        assert(hr == S_OK);
+
+        // run the compute shader 
+        int nb_groups = ceil(nb_cells /32.0f);
+        int grps_per_dim = ceil(cbrt(nb_groups));
+
+        cbuff_data.calc_switch = 0;
+        cbuff_data.grid_w = nb_cell_w;
+        cbuff_data.grid_h = nb_cell_h;
+        cbuff_data.grps_per_dim = grps_per_dim;
+
+        ID3D11UnorderedAccessView* uavs[3] = { first_uav, second_uav, limits_uav };
+        pimmediate_context->CSSetShader(comp_sh, nullptr, 0);
+        pimmediate_context->CSSetUnorderedAccessViews(0, 3, uavs, nullptr);
+        pimmediate_context->CSSetConstantBuffers(0, 1, &switch_buff);
+        D3D11_MAPPED_SUBRESOURCE mapped_sbr;
+        while(actual_step != target_step)
+        {
+            pimmediate_context->Map(switch_buff, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_sbr);
+            memcpy(mapped_sbr.pData, &cbuff_data, sizeof(my_cbuff));
+            pimmediate_context->Unmap(switch_buff, 0);
+            pimmediate_context->Dispatch(grps_per_dim, grps_per_dim, grps_per_dim);
+            actual_step++;
+            cbuff_data.calc_switch = cbuff_data.calc_switch ? 0 : 1;
+        }
+        // copy the result back to the grid 
+        D3D11_BUFFER_DESC staging_bd;
+        ID3D11Buffer* output_buff;
+        if(cbuff_data.calc_switch)
+            output_buff = second_buff;
+        else
+            output_buff = first_buff;
+        output_buff->GetDesc(&staging_bd);
+        staging_bd.Usage = D3D11_USAGE_STAGING;
+        staging_bd.BindFlags = 0;
+        staging_bd.MiscFlags = 0;
+        staging_bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+        ID3D11Buffer* staging_buff = nullptr;
+        hr = pdevice->CreateBuffer(&staging_bd, NULL, &staging_buff);
+        assert(hr == S_OK);
+        pimmediate_context->CopyResource(staging_buff, output_buff);
+        pimmediate_context->Map(staging_buff, 0, D3D11_MAP_READ, 0, &mapped_sbr);
+        memcpy(grid, mapped_sbr.pData, nb_cell_h * nb_cell_w * 4);
+        pimmediate_context->Unmap(staging_buff, 0);
+
+        // gettin the new limits back 
+        limits_buff->GetDesc(&staging_bd);
+        staging_bd.Usage = D3D11_USAGE_STAGING;
+        staging_bd.BindFlags = 0;
+        staging_bd.MiscFlags = 0;
+        staging_bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+        hr = pdevice->CreateBuffer(&staging_bd, NULL, &staging_buff);
+        assert(hr == S_OK);
+        pimmediate_context->CopyResource(staging_buff, limits_buff);
+        pimmediate_context->Map(staging_buff, 0, D3D11_MAP_READ, 0, &mapped_sbr);
+        memcpy(&stepping_limits, mapped_sbr.pData, 16);
+        pimmediate_context->Unmap(staging_buff, 0);
+
+        // clearing and releasing everything
+        pimmediate_context->CSSetShader(nullptr, nullptr, 0);
+        ID3D11UnorderedAccessView* uav_null[2] = { nullptr, nullptr };
+        pimmediate_context->CSSetUnorderedAccessViews(0, 2, uav_null, nullptr);
+        ID3D11Buffer* cb_null[1] = { nullptr };
+        pimmediate_context->CSSetConstantBuffers(0, 1, cb_null);
+
+        SAFE_RELEASE(first_buff);
+        SAFE_RELEASE(second_buff);
+        SAFE_RELEASE(first_uav);
+        SAFE_RELEASE(second_uav);
+        SAFE_RELEASE(comp_sh);
+        SAFE_RELEASE(pimmediate_context);
+        SAFE_RELEASE(pdevice);
+        SAFE_RELEASE(switch_buff);
+#else
+        while (actual_step != target_step)
+            one_step_ahead();
+#endif
+        normal_mode = true;
         go_mode = false;
+        prv_targ_stp = target_step;
     }
 }
 
@@ -3316,6 +3476,12 @@ void init_everything()
     bmp_zone.x = double(nb_cell_w * cell_w - screen_zone.w) / 2;
     bmp_zone.y = double(nb_cell_h * cell_h - screen_zone.h) / 2;
     vbmp_zone = { 0, 0, nb_cell_w * cell_w, nb_cell_h * cell_h };
+
+    stepping_limits.top = nb_cell_h;
+    stepping_limits.left = nb_cell_w;
+    stepping_limits.right = 0;
+    stepping_limits.bottom = 0;
+    initial_limits = stepping_limits;
 
     // load images
     for (int i = 0; i < 3; i++)
@@ -3564,7 +3730,6 @@ WinMain(HINSTANCE Instance,
                 opnf_dlg.scrl.timer.tick();
                 sim_timer.tick();
                 cursor_timer.tick();
-               
             }
         }
     }
