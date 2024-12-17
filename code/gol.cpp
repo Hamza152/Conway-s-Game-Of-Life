@@ -293,6 +293,7 @@ HWND main_wnd;
 timer app_timer;
 timer cursor_timer;
 timer frame_timer;
+uint32 frame_cnt;
 
 // Bitmap params ----------------------------------
 void* bmp_memory = NULL;
@@ -330,7 +331,9 @@ bool is_step_time = false;
 timer sim_timer;
 bool sim_on       = false;
 double sim_freq   = 1;
-double step_dur   = 0.5;
+double max_sim_freq = 60;
+double min_sim_freq = 1;
+double step_dur   = 1;
 int actual_step   = 0;
 int target_step   = -1;
 int prv_targ_stp  = -1;
@@ -791,9 +794,20 @@ void draw_sim_vel()
 
     recta vel_zone = { mul_sign_pos.x + mul_sign_zone.w + 1, mul_sign_pos.y + mul_sign_zone.h - 14, 36, 14 };
     int crc_w = vel_zone.w / 3;
-    draw_num(char(int(sim_freq) + '0'), { vel_zone.x, vel_zone.y, crc_w, vel_zone.h });
-    draw_from_im(num_letters, dot_zone, { vel_zone.x + crc_w , vel_zone.y + vel_zone.h - dot_zone.h });
-    draw_num(int(sim_freq * 10) % 10 + '0', { vel_zone.x + crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
+    if(int(sim_freq)/10 == 0)
+    {
+        draw_num(char(int(sim_freq) + '0'), { vel_zone.x, vel_zone.y, crc_w, vel_zone.h });
+        draw_from_im(num_letters, dot_zone, { vel_zone.x + crc_w , vel_zone.y + vel_zone.h - dot_zone.h });
+        draw_num(int(sim_freq * 10) % 10 + '0', { vel_zone.x + crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
+
+    }
+    else
+    {
+        draw_num(char(int(sim_freq)/10 + '0'), { vel_zone.x, vel_zone.y, crc_w, vel_zone.h });
+        draw_num(char(int(sim_freq)%10 + '0'), { vel_zone.x + crc_w, vel_zone.y, crc_w, vel_zone.h });
+        draw_from_im(num_letters, dot_zone, { vel_zone.x + 2*crc_w , vel_zone.y + vel_zone.h - dot_zone.h });
+        draw_num(int(sim_freq * 10) % 10 + '0', { vel_zone.x + 2*crc_w + dot_zone.w , vel_zone.y, crc_w, vel_zone.h });
+    }
 }
 
 void draw_actual_step()
@@ -3166,7 +3180,7 @@ void update_app_params()
                 if (mouse_coords.x <= intens_bar.scr_zone.x)
                     intens_slct.scr_zone.x = intens_bar.scr_zone.x - intens_slct.scr_zone.w / 2;
             }
-            sim_freq = double(5 * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x)) / intens_bar.scr_zone.w + 1;
+            sim_freq = (max_sim_freq - min_sim_freq) * (intens_slct.scr_zone.x + intens_slct.scr_zone.w / 2 - intens_bar.scr_zone.x) / intens_bar.scr_zone.w + min_sim_freq;
             step_dur = 1.0 / sim_freq;
 
             // mouse activation of grid cells + menu zone interaction
@@ -3213,6 +3227,7 @@ void update_app_params()
             // play button click = simulation on => stepping ahead with given velocity
             if (sim_on)
             {
+                sim_timer.tick();
                 if (sim_timer.total >= step_dur)
                 {
                     sim_timer.reset();
@@ -3708,6 +3723,7 @@ void init_everything()
     frame_timer.reset();
     app_timer.reset();
     cursor_timer.reset();
+    sim_timer.reset();
 }
 
 int CALLBACK
@@ -3771,15 +3787,13 @@ WinMain(HINSTANCE Instance,
                 frame_timer.tick();
                 if (frame_timer.dt < frame_dur )
                     Sleep((frame_dur - frame_timer.dt) * 1000);
-
                 HDC device_context = GetDC(main_wnd);
                 RECT client_rect;
                 GetClientRect(main_wnd, &client_rect);
                 update_wnd(device_context, &client_rect);
                 ReleaseDC(main_wnd, device_context);
-                
+
                 opnf_dlg.scrl.timer.tick();
-                sim_timer.tick();
                 cursor_timer.tick();
             }
         }
