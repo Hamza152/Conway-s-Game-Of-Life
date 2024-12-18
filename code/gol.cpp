@@ -360,6 +360,7 @@ int initial_curs_x;
 bool gif_params_collect = false;
 bool gif_slct_mode = false;
 bool gif_params_entrd = false;
+bool gif_params_err = false;
 int nb_gen = 1;
 int gen_ps = 1;
 std::wstring gif_path;
@@ -396,6 +397,7 @@ info_dlg opn_wrong_f;
 info_dlg gif_slct_info;
 info_dlg ext_err_info;
 collect_dlg gif_params_dlg;
+info_dlg gif_params_err_dlg;
 
 // user input params ----------------------------------
 mouse my_mouse;
@@ -451,19 +453,19 @@ hinted_face face_chars[200];
 
 // function prototypes ----------------------------------
 // basic blitting  
-void draw_bgnd_color(uint32 color);
-void draw_color_to_zone(uint32 color, recta zone, recta limits);
-void draw_line(point p1, point p2, int w, uint32 clr);
-void draw_rect_mesh(uint32 clr, int wd, int hd);
-void draw_diag_mesh(uint32 clr, int d0);
-void draw_recta(recta my_rect, uint32 color, int bordr_w);
-void draw_out_recta(recta my_rect, uint32 color, int bordr_w);
-void draw_im(image im, bool to_blit);
-void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_color, uint32 color, recta limits);
-void draw_from_im(image src_im, recta src_zone, point pos);
-void draw_num(char num, recta dest_zone);
-void draw_text(const wchar_t* my_text, point pos, point char_size, bool to_color , uint32 color, recta limits); // old way using fixed sprites
-void draw_text_to_zone(const wchar_t* my_text, recta dest_zone, bool to_color, uint32 color); // old way using fixed sprites
+void draw_bgnd_color(const uint32& color);
+void draw_color_to_zone(const uint32& color, const recta& zone, const recta& limits);
+void draw_line(point p1, point p2, int w, const uint32& clr);
+void draw_rect_mesh(const uint32& clr, const int& wd, const int& hd);
+void draw_diag_mesh(const uint32& clr, const int& d0);
+void draw_recta(const recta& my_rect, const uint32& color, const int& bordr_w);
+void draw_out_recta(const recta& my_rect, const uint32& color, const int& bordr_w);
+void draw_im(const image& im, const bool& to_blit);
+void instrch_from_im(const image& src_im, const recta& src_zone, const recta& dest_zone, const bool& to_color, const uint32& color, const recta& limits);
+void draw_from_im(const image& src_im, const recta& src_zone, const point& pos);
+void draw_num(const char& num, const recta& dest_zone);
+void draw_text(const wchar_t* my_text, point pos, point char_size, const bool& to_color , const uint32& color, const recta& limits); // old way using fixed sprites
+void draw_text_to_zone(const wchar_t* my_text, const recta& dest_zone, const bool& to_color, const uint32& color); // old way using fixed sprites
 
 void draw_text_cntrd(FT_Face& face, const std::wstring& str, const recta& zone, const recta& margins = {0,0,0,0}, const uint32& color = grey); // using freetype
 void draw_text_cntrd_fit(FT_Face& face, const std::wstring& str, const recta& zone, const recta& margins, const uint32& color = grey); // using freetype
@@ -475,10 +477,10 @@ void update_wnd(HDC device_context, RECT* client_rect);
 void draw_sim_vel();
 void draw_actual_step();
 void draw_region_slct();
-void draw_butt(const recta& zone, std::wstring str, int marg, uint32 clr = orange, uint32 hvr_clr = l_blue);
+void draw_butt(const recta& zone, std::wstring str, const int& marg, const uint32& clr = orange, const uint32& hvr_clr = l_blue);
 
 // simulation 
-bool is_neigh_alive(int neigh_x, int neigh_y);
+bool is_neigh_alive(const int& neigh_x, const int& neigh_y);
 void one_step_ahead(); 
 
 // grid updating 
@@ -504,7 +506,7 @@ void add_constant(std::vector<int>& vec, int start_idx, int end_idx, int val);
 int  get_sum(std::vector<int>& vec, int start_idx, int end_idx);
 bool check_ext(const std::wstring& file_path, const std::wstring& ext);
 
-void draw_bgnd_color(uint32 color)
+void draw_bgnd_color(const uint32& color)
 {
     uint32* pixel = (uint32*)bmp_memory;
     for (int y = 0; y < screen_zone.h; y++)
@@ -513,7 +515,7 @@ void draw_bgnd_color(uint32 color)
 
 }
 
-void draw_color_to_zone(uint32 color, recta zone, recta limits = {-1,-1,INT_MAX,INT_MAX})
+void draw_color_to_zone(const uint32& color, const recta& zone, const recta& limits = {-1,-1,INT_MAX,INT_MAX})
 {
     uint32* pixel = (uint32*)bmp_memory;
     
@@ -527,7 +529,7 @@ void draw_color_to_zone(uint32 color, recta zone, recta limits = {-1,-1,INT_MAX,
             pixel[y * screen_zone.w + x] = color;
 }
 
-void draw_recta(recta my_rect, uint32 color, int bordr_w)
+void draw_recta(const recta& my_rect, const uint32& color, const int& bordr_w)
 {
     draw_color_to_zone(color, { my_rect.x, my_rect.y, bordr_w, my_rect.h});
     draw_color_to_zone(color, { my_rect.x + my_rect.w - bordr_w, my_rect.y, bordr_w, my_rect.h});
@@ -535,7 +537,7 @@ void draw_recta(recta my_rect, uint32 color, int bordr_w)
     draw_color_to_zone(color, { my_rect.x , my_rect.y + my_rect.h - bordr_w, my_rect.w , bordr_w });
 }
 
-void draw_out_recta(recta my_rect, uint32 color, int bordr_w)
+void draw_out_recta(const recta& my_rect, const uint32& color, const int& bordr_w)
 {
     draw_color_to_zone(color, {my_rect.x - bordr_w, my_rect.y - bordr_w, bordr_w, my_rect.h + 2* bordr_w });
     draw_color_to_zone(color, { my_rect.x + my_rect.w, my_rect.y- bordr_w, bordr_w, my_rect.h + 2* bordr_w });
@@ -543,7 +545,7 @@ void draw_out_recta(recta my_rect, uint32 color, int bordr_w)
     draw_color_to_zone(color, { my_rect.x - bordr_w, my_rect.y + my_rect.h, my_rect.w + 2* bordr_w, bordr_w });
 }
 
-void draw_line(point p1, point p2, int w, uint32 clr)
+void draw_line(point p1, point p2, int w, const uint32& clr)
 {
     uint32* pixel = (uint32*)bmp_memory;
     double a = double(p1.y - p2.y) / (p1.x - p2.x);   
@@ -599,7 +601,7 @@ void draw_line(point p1, point p2, int w, uint32 clr)
     }
 }
 
-void draw_rect_mesh(uint32 clr, int wd, int hd)
+void draw_rect_mesh(const uint32& clr, const int& wd, const int& hd)
 {
     uint32* pixel = (uint32*)bmp_memory;
     for (int y = 0; y < screen_zone.h; y+= hd)
@@ -611,7 +613,7 @@ void draw_rect_mesh(uint32 clr, int wd, int hd)
 			pixel[y * screen_zone.w + x] = clr;
 }
 
-void draw_diag_mesh(uint32 clr, int d0)
+void draw_diag_mesh(const uint32& clr, const int& d0)
 {
     int y = screen_zone.h ;
     int x = screen_zone.w ;
@@ -632,7 +634,7 @@ void draw_diag_mesh(uint32 clr, int d0)
     }
 }
 
-void draw_im(image im, bool to_blit = false)
+void draw_im(const image& im, const bool& to_blit = false)
 {
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask= 0xff000000;
@@ -658,7 +660,7 @@ void draw_im(image im, bool to_blit = false)
     }
 }
 
-void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_color = false, uint32 color = black, recta limits = { -1,-1,INT_MAX,INT_MAX })
+void instrch_from_im(const image& src_im, const recta& src_zone, const recta& dest_zone, const bool& to_color = false, const uint32& color = black, const recta& limits = { -1,-1,INT_MAX,INT_MAX })
 {
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask = 0xff000000;
@@ -694,7 +696,7 @@ void instrch_from_im(image src_im, recta src_zone, recta dest_zone, bool to_colo
     }
 }
 
-void draw_from_im(image src_im, recta src_zone, point pos)
+void draw_from_im(const image& src_im, const recta& src_zone, const point& pos)
 {
     uint32* pixel = (uint32*)bmp_memory;
     uint32 tr_mask = 0xff000000;
@@ -723,7 +725,7 @@ void draw_from_im(image src_im, recta src_zone, point pos)
     }
 }
 
-void draw_num(char num, recta dest_zone)
+void draw_num(const char& num, const recta& dest_zone)
 {
     int num_idx = num - '0';
     recta num_zone = { num_idx * src_num_width, 0, src_num_width, src_num_height };
@@ -739,7 +741,7 @@ bool in_zone(const point& m_coords, const recta& zone)
     return false;
 }
 
-void draw_text(const wchar_t* my_text, point pos, point char_size, bool to_color = false, uint32 color = black, recta limits = { -1,-1,INT_MAX,INT_MAX })
+void draw_text(const wchar_t* my_text, const point& pos, const point& char_size, const bool& to_color = false, const uint32& color = black, const recta& limits = { -1,-1,INT_MAX,INT_MAX })
 {
 
     recta crc_src_zone = {0 , 16, letter_w, letter_h };
@@ -763,7 +765,7 @@ void draw_text(const wchar_t* my_text, point pos, point char_size, bool to_color
     }
 }
 
-void draw_text_to_zone(const wchar_t* my_text, recta dest_zone,bool to_color = false, uint32 color = black)
+void draw_text_to_zone(const wchar_t* my_text, const recta& dest_zone, const bool& to_color = false, const uint32& color = black)
 {
     int crc_nbr = 0;
     while (my_text[crc_nbr] != L'\0')
@@ -1375,7 +1377,7 @@ void info_dlg::draw_txt(FT_Face& face, const uint32& color)
     int k = 0;
     for (int i = 0; i < txt.size(); i++)
     {
-        if (i == nxt_line_idxs[k])
+        if (nxt_line_idxs.size() && i == nxt_line_idxs[k])
         {
             txt_pos_x = txt_zone.x;
             txt_zone.y += char_h;
@@ -1986,16 +1988,37 @@ wnd_callback(HWND wnd,
             {
                 if (in_zone(mouse_coords_ldown, gif_params_dlg.ok_zone) && in_zone(mouse_coords_lup, gif_params_dlg.ok_zone))
                 {
-                    gen_ps = std::stoi(gif_params_dlg.txt_edits[0].str);
-                    nb_gen = std::stoi(gif_params_dlg.txt_edits[1].str);
-
-                    gen_ps = gen_ps > 0 ? gen_ps : 1;
-                    nb_gen = nb_gen > 0 ? nb_gen : 1;
-
-                    save_as_gif();
-                    gif_params_collect = false;
-                    gif_saving = false;
-                    normal_mode = true;
+                    if (gif_params_dlg.txt_edits[0].str.size() && gif_params_dlg.txt_edits[1].str.size())
+                    {
+                        gen_ps = std::stoi(gif_params_dlg.txt_edits[0].str);
+                        nb_gen = std::stoi(gif_params_dlg.txt_edits[1].str);
+                        
+                        if (gen_ps == 0 || nb_gen == 0)
+                        {
+                            gif_params_err = true;
+                            gif_params_collect = false;
+                        }
+                        else
+                        {
+                            save_as_gif();
+                            gif_params_collect = false;
+                            gif_saving = false;
+                            normal_mode = true;
+                        }
+                    }
+                    else
+                    {
+                        gif_params_err = true;
+                        gif_params_collect = false;
+                    }                    
+                }
+            }
+            else if (gif_params_err)
+            {
+                if (in_zone(mouse_coords_ldown, gif_params_err_dlg.ok_zone) && in_zone(mouse_coords_lup, gif_params_err_dlg.ok_zone))
+                { 
+                    gif_params_err = false;
+                    gif_params_collect = true;
                 }
             }
         }
@@ -2473,7 +2496,7 @@ void draw_region_slct()
     draw_out_recta({ bmp_region_zone.x + 1, bmp_region_zone.y + 1, bmp_region_zone.w - 2, bmp_region_zone.h - 2 }, orange, 2);
 }
 
-void draw_butt(const recta& zone, std::wstring str, int marg, uint32 clr, uint32 hvr_clr)
+void draw_butt(const recta& zone, std::wstring str, const int& marg, const uint32& clr, const uint32& hvr_clr)
 {
     if (in_zone(mouse_coords, zone))
     {
@@ -2520,7 +2543,7 @@ void save_as_gif()
 
     reinit_grid();
     int delay;
-    delay = 100.0 / gen_ps >= 10 ? int(100.0 / gen_ps) : 10;
+    delay = 100.0 / gen_ps >= 1 ? int(100.0 / gen_ps) : 1;
     GifWriter g;
     GifBegin(&g, gif_path.c_str(), width, height, delay);
     for(int k =0; k <= nb_gen; k++)
@@ -2707,8 +2730,11 @@ void update_back_buffer()
 {
     if (normal_mode || gif_saving)
     {
+        for (int k = 0; k < 1000000; k++)
+        {
+            draw_color_to_zone(white, { 1, 1, 0, 0 });
+        }
         // grid drawing 
-        draw_bgnd_color(black);
         int i = 1;
         int line_x = 0;
         while (line_x < screen_zone.w)
@@ -2727,9 +2753,14 @@ void update_back_buffer()
         }
 
         // updating the state of bitmap
-        for (int i = int(bmp_zone.x / cell_w); i < int((bmp_zone.x + bmp_zone.w) / cell_w) + 1; i++)
+        int i0 = int(bmp_zone.x / cell_w);
+        int i_max = int((bmp_zone.x + bmp_zone.w) / cell_w) + 1;
+        int j0 = int(bmp_zone.y / cell_h);
+        int j_max = int((bmp_zone.y + bmp_zone.h) / cell_h) + 1;
+
+        for (int i = i0; i < i_max; i++)
         {
-            for (int j = int(bmp_zone.y / cell_h); j < int((bmp_zone.y + bmp_zone.h) / cell_h) + 1; j++)
+            for (int j = j0; j < j_max; j++)
             {
                 recta zone = { i * cell_w, j * cell_h , cell_w, cell_h };
 
@@ -2741,6 +2772,8 @@ void update_back_buffer()
                 recta in_bmp_zone = { scr_cell_x + 2, scr_cell_y + 2, scr_cell_w,  scr_cell_h };
                 if (grid[j * nb_cell_w + i])
                     draw_color_to_zone(light, in_bmp_zone);
+                else
+                    draw_color_to_zone(black, in_bmp_zone);
             }
         }
 
@@ -2844,6 +2877,11 @@ void update_back_buffer()
                 {
                     gif_params_dlg.txt_edits[i].draw();
                 }
+            }
+            else if (gif_params_err)
+            {
+                draw_diag_mesh(grey, 5);
+                gif_params_err_dlg.draw();
             }
         }
     }
@@ -2988,7 +3026,6 @@ void update_back_buffer()
     {
         gif_slct_info.draw();
     }
-
     if (show_cursor)
     {
         if (cursor_timer.total <= 0.8)
@@ -3686,6 +3723,12 @@ void init_everything()
     temp.zone.y += gif_params_dlg.title_h;
     temp.txt_zone.y += gif_params_dlg.title_h;
     gif_params_dlg.txt_edits.push_back(temp);
+
+    gif_params_err_dlg.txt = L"No saving parameters provided!";
+    gif_params_err_dlg.title = L"Error";
+    gif_params_err_dlg.zone = { savf_dlg.zone.x + savf_dlg.zone.w / 10, savf_dlg.zone.y + savf_dlg.zone.h / 10, 8 * opnf_dlg.zone.w / 10,0 };
+    gif_params_err_dlg.title_h = savf_dlg.zone.w / 12;
+    gif_params_err_dlg.fill_params(cascadia_face);
 
     gif_params_dlg.fill_params();
 
