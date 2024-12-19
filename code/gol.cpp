@@ -357,10 +357,6 @@ int mouse_slct_idx = 0;
 int initial_curs_x;
 
 // gif saving params ----------------------------------
-bool gif_params_collect = false;
-bool gif_slct_mode = false;
-bool gif_params_entrd = false;
-bool gif_params_err = false;
 int nb_gen = 1;
 int gen_ps = 1;
 std::wstring gif_path;
@@ -380,13 +376,16 @@ recta sh_hide_zone;
 recta map_zone = { 0,0,0,0 };
 
 // interaction modes, may intersect ----------------------------------
+bool normal_mode = true;
 bool open_file = false;
+bool f_error_dlg = false;
 bool save_file = false;
-bool gif_saving = false;
 bool save_ext_err = false;
 bool gif_sav_info = false;
-bool f_error_dlg = false;
-bool normal_mode = true;
+bool gif_bfr_slct = false;
+bool gif_slct_mode = false;
+bool gif_params_collect = false;
+bool gif_params_err = false;
 bool go_mode = false;
 bool del_mouse_lup = false;
 
@@ -505,6 +504,7 @@ void make_inside(r_recta& zone, const recta& limits);
 void add_constant(std::vector<int>& vec, int start_idx, int end_idx, int val);
 int  get_sum(std::vector<int>& vec, int start_idx, int end_idx);
 bool check_ext(const std::wstring& file_path, const std::wstring& ext);
+void from_to(bool& src, bool& dest);
 
 void draw_bgnd_color(const uint32& color)
 {
@@ -931,6 +931,8 @@ void collect_dlg::draw()
     }
     draw_out_recta(ok_zone, black, 2);
     draw_butt(ok_zone, L"OK", ok_zone.w / 3);
+    draw_out_recta(cancel_zone, black, 2);
+    draw_butt(cancel_zone, L"CANCEL", cancel_zone.w / 6);
 }
 
 void info_dlg::draw()
@@ -1092,25 +1094,24 @@ void load_from_file(std::wstring file_name)
             if (f_error_dlg)
                 break;
         }
-        stepping_limits = initial_limits;
+        initial_limits = stepping_limits;
         my_file >> k;
     }
     if (!my_file.eof())
     {
-        f_error_dlg = true;
+        from_to(open_file, f_error_dlg);
         draw_diag_mesh(grey, 5);
         stepping_limits = initial_limits;
     }
     else
     {
-        normal_mode = true;
+        from_to(open_file, normal_mode);
         my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y , 2, step_edit.txt_zone.h };
         step_edit.chars_x.clear();
         step_edit.str.clear();
         step_edit.chars_x.push_back(my_cursor.scr_zone.x);
         step_edit.dx_ref = 0;
     }
-    open_file = false;
     actual_step = 0;
     my_file.close();
 }
@@ -1767,12 +1768,21 @@ wnd_callback(HWND wnd,
             mov_region = false;
             if (normal_mode)
             {
-                if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
+                if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords_ldown, map_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone) && !sim_on)
                 {
                     point down_cell = get_clk_cell(mouse_coords_ldown);
                     point up_cell = get_clk_cell(mouse_coords_lup);
                     if (down_cell == up_cell)
                     {
+                        if (actual_step != 0) // we record the state as initial state so we go back to it when reinit button is clicked
+                        {
+                            grid_init_stt.clear();
+                            for(int i = stepping_limits.left; i <= stepping_limits.right; i++)
+                                for (int j = stepping_limits.top; j <= stepping_limits.bottom; j++)
+                                    if (grid[j * nb_cell_w + i])
+                                        grid_init_stt.push_back(point{ i, j });
+                            actual_step = 0;
+                        }
                         int i = up_cell.x;
                         int j = up_cell.y;
 
@@ -1793,7 +1803,7 @@ wnd_callback(HWND wnd,
                             else if (j > stepping_limits.bottom)
                                 stepping_limits.bottom = j;
                         }
-                        initial_limits= stepping_limits;
+                        initial_limits = stepping_limits;
                     }
                 }
                 else if (in_zone(mouse_coords_ldown, play_butt[0].scr_zone) && in_zone(mouse_coords_lup, play_butt[0].scr_zone))
@@ -1807,8 +1817,7 @@ wnd_callback(HWND wnd,
                     target_step = get_step_int();
                     if(target_step != actual_step)
                     {
-                        go_mode = true;
-                        normal_mode = false;
+                        from_to(normal_mode, go_mode);
                         if (target_step < prv_targ_stp || target_step < actual_step)
                         {
                             reinit_grid();
@@ -1833,8 +1842,7 @@ wnd_callback(HWND wnd,
                 }
                 else if (in_zone(mouse_coords_ldown, save_butt_zone) && in_zone(mouse_coords_lup, save_butt_zone))
                 {
-                    save_file = true;
-                    normal_mode = false;
+                    from_to(normal_mode, save_file);
                     sim_on = false;
                     get_exe_dir(savf_dlg.curr_dir);
                     savf_dlg.go_curr_dir();
@@ -1849,8 +1857,7 @@ wnd_callback(HWND wnd,
                 }
                 else if (in_zone(mouse_coords_ldown, open_butt_zone) && in_zone(mouse_coords_lup, open_butt_zone))
                 {
-                    open_file = true;
-                    normal_mode = false;
+                    from_to(normal_mode, open_file);
                     sim_on = false;
                     get_exe_dir(opnf_dlg.curr_dir);
                     opnf_dlg.go_curr_dir();
@@ -1868,8 +1875,7 @@ wnd_callback(HWND wnd,
 
                 if (in_zone(mouse_coords_ldown, opnf_dlg.cancel_zone) && in_zone(mouse_coords_lup, opnf_dlg.cancel_zone))
                 {
-                    open_file = false;
-                    normal_mode = true;
+                    from_to(open_file, normal_mode);
                     opnf_dlg.fslctd_idx = -1;
                     my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                 }
@@ -1885,8 +1891,7 @@ wnd_callback(HWND wnd,
             {
                 if (in_zone(mouse_coords_ldown, opn_wrong_f.ok_zone) && in_zone(mouse_coords_lup, opn_wrong_f.ok_zone))
                 {
-                    open_file = true;
-                    f_error_dlg = false;
+                    from_to(f_error_dlg, open_file);
                 }
             }
             else if (save_file)
@@ -1902,8 +1907,8 @@ wnd_callback(HWND wnd,
                             std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
                             if (check_ext(savf_dlg.txt_edit.str, L".gif"))
                             {
+                                from_to(save_file, gif_sav_info);
                                 gif_path = file_path;
-                                gif_sav_info = true;
                                 draw_diag_mesh(grey, 5);
                             }
                             else
@@ -1918,11 +1923,10 @@ wnd_callback(HWND wnd,
                                             my_file << grid[j * nb_cell_w + i] << " ";
                                 }
                                 my_file.close();
-                                normal_mode = true;
+                                from_to(save_file, normal_mode);
                                 my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                                 step_edit.slct_idx = step_edit.curs_idx = 0;
                             }
-                            save_file = false;
                         }
                     }
                     else
@@ -1930,8 +1934,8 @@ wnd_callback(HWND wnd,
                         std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
                         if (check_ext(savf_dlg.txt_edit.str, L".gif"))
                         {
+                            from_to(save_file, gif_sav_info);
                             gif_path = file_path;
-                            gif_sav_info = true;
                             draw_diag_mesh(grey, 5);
                         }
                         else if (check_ext(savf_dlg.txt_edit.str, L".txt"))
@@ -1946,21 +1950,19 @@ wnd_callback(HWND wnd,
                                         my_file << grid[j * nb_cell_w + i] << " ";
                             }
                             my_file.close();
-                            normal_mode = true;
+                            from_to(save_file, normal_mode);
                             my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                             step_edit.slct_idx = step_edit.curs_idx = 0;
                         }
                         else
                         {
-                            save_ext_err = true;
+                            from_to(save_file, save_ext_err);
                         }
-                        save_file = false;
                     }
                 }
                 else if (in_zone(mouse_coords_ldown, savf_dlg.cancel_zone) && in_zone(mouse_coords_lup, savf_dlg.cancel_zone))
                 {
-                    save_file = false;
-                    normal_mode = true;
+                    from_to(save_file, normal_mode);
                     my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                     step_edit.slct_idx = step_edit.curs_idx = 0;
                 }
@@ -1972,16 +1974,14 @@ wnd_callback(HWND wnd,
             {
                 if (in_zone(mouse_coords_ldown, ext_err_info.ok_zone) && in_zone(mouse_coords_lup, ext_err_info.ok_zone))
                 {
-                    save_ext_err = false;
-                    save_file = true;
+                    from_to(save_ext_err, save_file);
                 }
             }
             else if (gif_sav_info)
             {
                 if (in_zone(mouse_coords_ldown, gif_slct_info.ok_zone) && in_zone(mouse_coords_lup, gif_slct_info.ok_zone))
                 {
-                    gif_sav_info = false;
-                    gif_saving = true;
+                    from_to(gif_sav_info, gif_bfr_slct);
                 }
             }
             else if (gif_params_collect)
@@ -1995,30 +1995,29 @@ wnd_callback(HWND wnd,
                         
                         if (gen_ps == 0 || nb_gen == 0)
                         {
-                            gif_params_err = true;
-                            gif_params_collect = false;
+                            from_to(gif_params_collect, gif_params_err);
                         }
                         else
                         {
                             save_as_gif();
-                            gif_params_collect = false;
-                            gif_saving = false;
-                            normal_mode = true;
+                            from_to(gif_params_collect, normal_mode);
                         }
                     }
                     else
                     {
-                        gif_params_err = true;
-                        gif_params_collect = false;
+                        from_to(gif_params_collect, gif_params_err);
                     }                    
+                }
+                else if(in_zone(mouse_coords_ldown, gif_params_dlg.cancel_zone) && in_zone(mouse_coords_lup, gif_params_dlg.cancel_zone))
+                { 
+                    from_to(gif_params_collect, normal_mode);
                 }
             }
             else if (gif_params_err)
             {
                 if (in_zone(mouse_coords_ldown, gif_params_err_dlg.ok_zone) && in_zone(mouse_coords_lup, gif_params_err_dlg.ok_zone))
                 { 
-                    gif_params_err = false;
-                    gif_params_collect = true;
+                    from_to(gif_params_err, gif_params_collect);
                 }
             }
         }
@@ -2031,7 +2030,7 @@ wnd_callback(HWND wnd,
         mouse_coords_rdown.x = GET_X_LPARAM(lp);
         mouse_coords_rdown.y = GET_Y_LPARAM(lp);
         my_mouse.r_down = true;
-        if (gif_saving)
+        if (gif_bfr_slct)
         {
             recta sh_hide_zone;
             recta map_zone = { 0,0,0,0 };
@@ -2042,10 +2041,9 @@ wnd_callback(HWND wnd,
             }
             else
                 sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
+            
             if (!in_zone(mouse_coords_rdown, menu_zone) && !in_zone(mouse_coords_rdown, sh_hide_zone) && !in_zone(mouse_coords_rdown, map_zone))
-            {
-                gif_slct_mode = true;
-            }
+                from_to(gif_bfr_slct, gif_slct_mode);
         }
     }break;
     case WM_RBUTTONUP:
@@ -2055,18 +2053,16 @@ wnd_callback(HWND wnd,
 
         my_mouse.r_down = false;
         
-        if (gif_saving)
+        if (gif_slct_mode)
         {
             if(in_zone(mouse_coords_rup, screen_zone) && in_zone(mouse_coords_rdown, screen_zone))
             {
+                from_to(gif_slct_mode, gif_params_collect);
                 gif_rg0 = get_clk_cell(mouse_coords_rdown);
                 gif_rg1 = get_clk_cell(mouse_coords_rup);
                 point temp = gif_rg0;
                 gif_rg0 = { min(temp.x, gif_rg1.x), min(temp.y, gif_rg1.y) };
                 gif_rg1 = { max(temp.x, gif_rg1.x), max(temp.y, gif_rg1.y) };
-
-                gif_slct_mode = false;
-                gif_params_collect = true; 
                 for(int i = 0; i < gif_params_dlg.txt_edits.size(); i++) 
                 {
                     gif_params_dlg.txt_edits[i].chars_x.clear();
@@ -2141,8 +2137,8 @@ wnd_callback(HWND wnd,
                         std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
                         if (check_ext(savf_dlg.txt_edit.str, L".gif"))
                         {
+                            from_to(save_file, gif_sav_info);
                             gif_path = file_path;
-                            gif_sav_info = true;
                             draw_diag_mesh(grey, 5);
                         }
                         else
@@ -2157,12 +2153,11 @@ wnd_callback(HWND wnd,
                                         my_file << grid[j * nb_cell_w + i] << " ";
                             }
                             my_file.close();
-                            normal_mode = true;
+                            from_to(save_file, normal_mode);
                             my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                             step_edit.slct_idx = step_edit.curs_idx = 0;
                             del_mouse_lup = true;
                         }
-                        save_file = false;
                     }
                 }
             }
@@ -2310,8 +2305,7 @@ wnd_callback(HWND wnd,
                 }break;
                 case VK_ESCAPE:
                 {
-                    open_file = false;
-                    normal_mode = true;
+                    from_to(open_file, normal_mode);
                     opnf_dlg.fslctd_idx = -1;
                     my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
 
@@ -2372,8 +2366,7 @@ wnd_callback(HWND wnd,
                 }break;
                 case VK_ESCAPE:
                 {
-                    save_file = false;
-                    normal_mode = true;
+                    from_to(save_file, normal_mode);
                     savf_dlg.fslctd_idx = -1;
                     my_cursor.scr_zone = { step_edit.txt_zone.x, step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
                     step_edit.slct_idx = step_edit.curs_idx = 0;
@@ -2402,8 +2395,7 @@ wnd_callback(HWND wnd,
             {
                 case VK_RETURN:
                 {
-                    f_error_dlg = false;
-                    open_file = true;
+                    from_to(f_error_dlg, open_file);
                 }break;
             }
         }
@@ -2415,11 +2407,11 @@ wnd_callback(HWND wnd,
         HCURSOR h_curs;
         h_curs = LoadCursor(NULL, IDC_ARROW);
 
-        if (normal_mode)
+        if (normal_mode || gif_bfr_slct) 
         {
             if (in_zone(mouse_coords, step_edit.zone))
                 h_curs = LoadCursor(NULL, IDC_IBEAM);
-            else if (my_mouse.l_down)
+            else if (my_mouse.l_down && !in_zone(mouse_coords_ldown, menu_zone) && !in_zone(mouse_coords_ldown, sh_hide_zone))
                     h_curs = LoadCursor(NULL, IDC_SIZEALL);
 
         }
@@ -2546,7 +2538,7 @@ void save_as_gif()
     delay = 100.0 / gen_ps >= 1 ? int(100.0 / gen_ps) : 1;
     GifWriter g;
     GifBegin(&g, gif_path.c_str(), width, height, delay);
-    for(int k =0; k <= nb_gen; k++)
+    for(int k =0; k < nb_gen; k++)
     {
         for (int i = 0; i < width; i++)
         {
@@ -2587,6 +2579,13 @@ void save_as_gif()
     }
     GifEnd(&g);
     reinit_grid();
+    actual_step = 0;
+}
+
+void from_to(bool& src, bool& dest)
+{
+    src = false;
+    dest = true;
 }
 
 int txt_edit_params::get_char_idx()
@@ -2720,36 +2719,35 @@ void info_dlg::fill_params(FT_Face& face)
 void collect_dlg::fill_params()
 {
     ok_zone.w = zone.w / 5;
-    ok_zone.x = zone.x + (zone.w - ok_zone.w) / 2;
+    ok_zone.x = zone.x + ok_zone.w;
     ok_zone.h = 2 * title_h / 3;
     zone.h = title_h + txt_edits.size() * (3*title_h/2) + 2*ok_zone.h;
     ok_zone.y = zone.y + zone.h -  2 * ok_zone.h;
+
+    cancel_zone.w = ok_zone.w;
+    cancel_zone.x = zone.x + 3 * ok_zone.w;
+    cancel_zone.y = ok_zone.y;
+    cancel_zone.h = ok_zone.h;
 }
 
 void update_back_buffer()
 {
-    if (normal_mode || gif_saving)
+    if (normal_mode || gif_bfr_slct || gif_slct_mode) // this is so user can interact with map to choose region he wants to record as gif
     {
-        for (int k = 0; k < 1000000; k++)
-        {
-            draw_color_to_zone(white, { 1, 1, 0, 0 });
-        }
         // grid drawing 
-        int i = 1;
-        int line_x = 0;
+        double line_x = (int(bmp_zone.x / cell_w) * double(cell_w) - bmp_zone.x) * zoom_ratio_x;
+        double stride_x = double(cell_w) * zoom_ratio_x;
         while (line_x < screen_zone.w)
         {
-            line_x = ((int(bmp_zone.x / cell_w) + i) * cell_w - bmp_zone.x) * zoom_ratio_x;
-            draw_color_to_zone(white, { line_x, 0, 2, screen_zone.h });
-            i++;
+            draw_color_to_zone(white, { int(line_x), 0, 2, screen_zone.h });
+            line_x += stride_x;
         }
-        i = 1;
-        int line_y = 0;
+        double line_y = (int(bmp_zone.y / cell_w) * double(cell_w) - bmp_zone.y) * zoom_ratio_y;
+        double stride_y = double(cell_h) * zoom_ratio_y;
         while (line_y < screen_zone.h)
         {
-            line_y = ((int(bmp_zone.y / cell_w) + i) * cell_w - bmp_zone.y) * zoom_ratio_y;
-            draw_color_to_zone(white, { 0,line_y, screen_zone.w, 2 });
-            i++;
+            draw_color_to_zone(white, { 0, int(line_y), screen_zone.w, 2 });
+            line_y += stride_y;
         }
 
         // updating the state of bitmap
@@ -2764,12 +2762,12 @@ void update_back_buffer()
             {
                 recta zone = { i * cell_w, j * cell_h , cell_w, cell_h };
 
-                int scr_cell_x = (zone.x - bmp_zone.x) * zoom_ratio_x;
-                int scr_cell_y = (zone.y - bmp_zone.y) * zoom_ratio_y;
-                int scr_cell_w = int((zone.x + cell_w - bmp_zone.x) * zoom_ratio_x) - scr_cell_x - 2;
-                int scr_cell_h = int((zone.y + cell_h - bmp_zone.y) * zoom_ratio_y) - scr_cell_y - 2;
+                double scr_cell_x = (zone.x - bmp_zone.x) * zoom_ratio_x;
+                double scr_cell_y = (zone.y - bmp_zone.y) * zoom_ratio_y;
+                int scr_cell_w = int(scr_cell_x + cell_w * zoom_ratio_x - int(scr_cell_x)) - 2;
+                int scr_cell_h = int(scr_cell_y + cell_h * zoom_ratio_y - int(scr_cell_y)) - 2;
 
-                recta in_bmp_zone = { scr_cell_x + 2, scr_cell_y + 2, scr_cell_w,  scr_cell_h };
+                recta in_bmp_zone = { int(scr_cell_x) + 2, int(scr_cell_y) + 2, scr_cell_w,  scr_cell_h };
                 if (grid[j * nb_cell_w + i])
                     draw_color_to_zone(light, in_bmp_zone);
                 else
@@ -2858,31 +2856,14 @@ void update_back_buffer()
         {
             step_edit.draw();
         }
-        if (gif_saving)
+        if (gif_slct_mode)
         {
-            if (gif_slct_mode)
-            {
-                int x = mouse_coords.x;
-                int y = mouse_coords.y;
-                int x0 = mouse_coords_rdown.x;
-                int y0 = mouse_coords_rdown.y;
-                int mi_x = min(x, x0), mi_y = min(y, y0), ma_x = max(x, x0), ma_y = max(y, y0);
-                draw_recta({ mi_x, mi_y, ma_x - mi_x + 1, ma_y - mi_y + 1 }, l_blue, 2);
-            }
-            else if (gif_params_collect)
-            {
-                draw_diag_mesh(grey, 5);
-                gif_params_dlg.draw();
-                for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
-                {
-                    gif_params_dlg.txt_edits[i].draw();
-                }
-            }
-            else if (gif_params_err)
-            {
-                draw_diag_mesh(grey, 5);
-                gif_params_err_dlg.draw();
-            }
+            int x = mouse_coords.x;
+            int y = mouse_coords.y;
+            int x0 = mouse_coords_rdown.x;
+            int y0 = mouse_coords_rdown.y;
+            int mi_x = min(x, x0), mi_y = min(y, y0), ma_x = max(x, x0), ma_y = max(y, y0);
+            draw_recta({ mi_x, mi_y, ma_x - mi_x + 1, ma_y - mi_y + 1 }, l_blue, 2);
         }
     }
     else if (open_file)
@@ -3026,6 +3007,21 @@ void update_back_buffer()
     {
         gif_slct_info.draw();
     }
+    else if (gif_params_collect)
+    {
+        draw_diag_mesh(grey, 5);
+        gif_params_dlg.draw();
+        for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
+        {
+            gif_params_dlg.txt_edits[i].draw();
+        }
+    }
+    else if (gif_params_err)
+    {
+        draw_diag_mesh(grey, 5);
+        gif_params_err_dlg.draw();
+    }
+
     if (show_cursor)
     {
         if (cursor_timer.total <= 0.8)
@@ -3063,7 +3059,7 @@ void update_app_params()
         sh_hide_zone = { anti_hide.scr_zone.x - 60, anti_hide.scr_zone.y, anti_hide.w + 60, anti_hide.h };
     }
 
-    if (normal_mode || gif_saving)
+    if (normal_mode || gif_bfr_slct || gif_slct_mode) // this is so user can interact with map to choose region he wants to record as gif
     {
         // grid and region_select dragging
         if (my_mouse.l_down && !zooming)
@@ -3221,7 +3217,7 @@ void update_app_params()
             step_dur = 1.0 / sim_freq;
 
             // mouse activation of grid cells + menu zone interaction
-            if (my_mouse.r_down)
+            if (my_mouse.r_down && !sim_on)
             {
                 if (!in_zone(mouse_coords, menu_zone) && !in_zone(mouse_coords, map_zone) && !in_zone(mouse_coords, sh_hide_zone))
                 {
@@ -3234,6 +3230,15 @@ void update_app_params()
                     {
                         if (i != 0 && i != nb_cell_w - 1 && j != 0 && j != nb_cell_h - 1)
                         {
+                            if (actual_step != 0) // we record the state as initial state so we go back to it when reinit button is clicked
+                            {
+                                grid_init_stt.clear();
+                                for (int i = stepping_limits.left; i <= stepping_limits.right; i++)
+                                    for (int j = stepping_limits.top; j <= stepping_limits.bottom; j++)
+                                        if (grid[j * nb_cell_w + i])
+                                            grid_init_stt.push_back(point{ i, j });
+                                actual_step = 0;
+                            }
                             if (!grid[j * nb_cell_w + i])
                                 grid_init_stt.push_back(point{ i, j });
                             else
@@ -3251,8 +3256,8 @@ void update_app_params()
                                 else if (j > stepping_limits.bottom)
                                     stepping_limits.bottom = j;
                             }
+                            initial_limits = stepping_limits;
                         }
-                        initial_limits = stepping_limits;
                     }
                     last_i = i;
                     last_j = j;
@@ -3275,18 +3280,6 @@ void update_app_params()
             {
                 prv_targ_stp = target_step;
                 sim_on = false;
-            }
-        }
-        if (gif_saving)
-        {
-            if (gif_params_collect)
-            {
-                for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
-                {
-                    gif_params_dlg.txt_edits[i].handle_slct();
-                }
-                txt_edit_params& temp = gif_params_dlg.txt_edits[gif_params_dlg.slctd_edit];
-                my_cursor.scr_zone.x = temp.chars_x[temp.curs_idx] - temp.dx_ref;
             }
         }
     }
@@ -3560,9 +3553,17 @@ void update_app_params()
         while (actual_step != target_step)
             one_step_ahead();
 #endif
-        normal_mode = true;
-        go_mode = false;
+        from_to(go_mode, normal_mode);
         prv_targ_stp = target_step;
+    }
+    else if (gif_params_collect)
+    {
+        for (int i = 0; i < gif_params_dlg.txt_edits.size(); i++)
+        {
+            gif_params_dlg.txt_edits[i].handle_slct();
+        }
+        txt_edit_params& temp = gif_params_dlg.txt_edits[gif_params_dlg.slctd_edit];
+        my_cursor.scr_zone.x = temp.chars_x[temp.curs_idx] - temp.dx_ref;
     }
 }
 
