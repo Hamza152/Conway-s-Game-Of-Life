@@ -6,7 +6,6 @@
 #include <string>
 #include <unordered_map>
 #include <algorithm>
-#include <shobjidl.h> // For IFileDialog
 #include <iostream>
 #include <fstream>
 #include <cwctype>
@@ -21,11 +20,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H  
 
-#define IDM_FILE_OPEN 1001
-#define IDM_FILE_EXIT 1002
-#define IDM_FILE_SAVE 1003
-#define DLG_OK_BUTT 1
-#define gpu_acceleration
+//#define gpu_acceleration
 #define SAFE_RELEASE(p)      { if (p) { (p)->Release(); (p)=nullptr; } }
 
 typedef int8_t int8;
@@ -814,7 +809,7 @@ void draw_sim_vel()
 
 void draw_actual_step()
 {
-    draw_text_cntrd_fit(cascadia_face, L"Actual Step", actual_step_zone, {0,-actual_step_zone.h,0,0});
+    draw_text_cntrd_fit(cascadia_face, L"Actual Gen", actual_step_zone, {0,-actual_step_zone.h,0,0});
 
     int nb_digits = 0;
     std::wstring act_step_str;
@@ -2784,7 +2779,7 @@ void update_back_buffer()
         draw_out_recta(step_edit.zone, grey, 3);
         //draw_text_to_zone(, , true, grey);
         //draw_text_to_zone("simulation velocity", sim_vel_zone, true, grey);
-        draw_text_cntrd_fit(cascadia_face, L"Go To Step", go_to_stp_zone, { 0, -go_to_stp_zone.h, 0, 0 });
+        draw_text_cntrd_fit(cascadia_face, L"Go To Gen", go_to_stp_zone, { 0, -go_to_stp_zone.h, 0, 0 });
         draw_text_cntrd_fit(cascadia_face, L"Simulation Velocity", sim_vel_zone, { 0, -sim_vel_zone.h, 0, 0 });
         draw_butt(save_butt_zone, L"SAVE", save_butt_zone.w / 16);
         draw_butt(open_butt_zone, L"OPEN", open_butt_zone.w / 16);
@@ -3653,8 +3648,12 @@ void init_everything()
 
     hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w + menu_zone.w * 3 / 800;
     hide.scr_zone.y = region_slct_zone.y - hide.h - menu_zone.h * 3.0 / 120;
+    hide.scr_zone.w = hide.w;
+    hide.scr_zone.h = hide.h;
     anti_hide.scr_zone.x = region_slct_zone.x + region_slct_zone.w - hide.w;
     anti_hide.scr_zone.y = region_slct_zone.y + region_slct_zone.h - hide.h;
+    anti_hide.scr_zone.w = anti_hide.w;
+    anti_hide.scr_zone.h = anti_hide.h;
 
     opnf_dlg.zone = { screen_zone.w / 3, screen_zone.h / 5, screen_zone.w / 3, 3 * screen_zone.h / 5 };
     opnf_dlg.exp_zone_wscrl = { opnf_dlg.zone.x + opnf_dlg.zone.w / 20, opnf_dlg.zone.y + opnf_dlg.zone.h / 20, 18 * opnf_dlg.zone.w / 20, 16 * opnf_dlg.zone.h / 20 };
