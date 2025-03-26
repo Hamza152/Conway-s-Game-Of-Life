@@ -1,6 +1,7 @@
 # Conway-s-Game-of-Life-
 A C++ implementation of John Horton Conway's Game of Life simulation using Win32 API. Big enough grid to explore patterns, includes real-time animation, and gif saving possibilities.  
-I used single header libraries "stb_image.h" for readng ".png" images and "gif.h" for gif saving purposes. Win32 API is used mainly for window creation and messages dispatching, but also for basic file opening and saving dialog boxes, customized versions are planned for the latter in future enhancements. 
+I used single header libraries "stb_image.h" for reading ".png" images and "gif.h" for gif saving purposes. Win32 API is used mainly for window creation and messages dispatching. There is a customised menu to handle the simulation parameters and also custom made file opening and saving dialog boxes. I used "FreeType" library for text rendering.  
+Because the patterns can get big and the calculation for next generation for each cell can be done separately, I used "D3D11 compute shader" to parallelise the simulation. While it took so long before, it is now fast to step ahead with a big number of generations.
 
 # Introduction
 Game of life is a cellular automaton, which means a mathematical model of computation that consists of a grid of where each cell is one of a finite number of states. The evolution of the grid is done in a discrete step by step manner based on a specific set of rules. It can simulate any Turing machine and that's why it is Turing complete.  
@@ -14,11 +15,14 @@ For Conway's Game of Life, the grid is 2D, and each cell can have one of two pos
 To start, launch the executable in "build" folder. Or  build it yourself by launching the "build.bat" file in "code" folder.    
   
 As of the UI:   
-&emsp;&emsp; * Start by creating an initial generation by selecting which cells you want alive, and from there you can:   
+&emsp;&emsp; * Start by creating an initial generation by selecting which cells you want alive, you can do this by:   
+&emsp;&emsp;&emsp;&emsp;* Left click mouse to activate on cell.  
+&emsp;&emsp;&emsp;&emsp;* Right click mouse and hold to activate cells when hovering over them.  
+&emsp;&emsp; * From there you can:  
 &emsp;&emsp;&emsp;&emsp; - Explore the evolution step by step.  
 &emsp;&emsp;&emsp;&emsp; - Jump to a specific generation.  
-&emsp;&emsp;&emsp;&emsp; - Launch the simulation with the desired speed.   
-&emsp;&emsp;* Left click mouse and drag or use the overview map on the bottom right to navigate through grid.   
+&emsp;&emsp;&emsp;&emsp; - Launch the simulation with the desired speed.  
+&emsp;&emsp* Left click mouse and drag or use the overview map on the bottom right to navigate through grid.  
 &emsp;&emsp;* Zoom In and out using the mouse wheel.   
 &emsp;&emsp;* Save patterns you find interesting either as:   
 &emsp;&emsp;&emsp;&emsp; - ".txt" format which can be opened by the application. Useful for later exploration and for sharing patterns with friends.  
