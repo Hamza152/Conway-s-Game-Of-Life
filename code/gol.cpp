@@ -20,7 +20,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H  
 
-//#define gpu_acceleration
+#define gpu_acceleration
 #define SAFE_RELEASE(p)      { if (p) { (p)->Release(); (p)=nullptr; } }
 
 typedef int8_t int8;
