@@ -1106,6 +1106,22 @@ void load_from_file(std::wstring file_name)
         step_edit.str.clear();
         step_edit.chars_x.push_back(my_cursor.scr_zone.x);
         step_edit.dx_ref = 0;
+        int patt_cells_w = initial_limits.right - initial_limits.left;
+        int patt_cells_h = initial_limits.bottom - initial_limits.top;
+
+        int left_cell, top_cell ;
+        int bmp_cells_w = 80;
+        left_cell = initial_limits.left + int((patt_cells_w - bmp_cells_w) / 2);
+        top_cell = initial_limits.top + int((patt_cells_h - int((bmp_cells_w * screen_zone.h)/screen_zone.w)) / 2);
+        
+        bmp_zone.x = left_cell * cell_w;
+        bmp_zone.y = top_cell * cell_h;
+        bmp_zone.w = bmp_cells_w * cell_w;
+        bmp_zone.h = (bmp_zone.w * screen_zone.h)/screen_zone.w;
+        bmp_zone_targ = bmp_zone;
+
+        zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
+        zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
     }
     actual_step = 0;
     my_file.close();
