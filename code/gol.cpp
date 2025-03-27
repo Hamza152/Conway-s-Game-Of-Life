@@ -1110,15 +1110,16 @@ void load_from_file(std::wstring file_name)
         int patt_cells_h = initial_limits.bottom - initial_limits.top;
 
         int left_cell, top_cell ;
-        int bmp_cells_w = 80;
+        int bmp_cells_w = 20;
         left_cell = initial_limits.left + int((patt_cells_w - bmp_cells_w) / 2);
-        top_cell = initial_limits.top + int((patt_cells_h - int((bmp_cells_w * screen_zone.h)/screen_zone.w)) / 2);
+        top_cell = initial_limits.top + int((patt_cells_h - bmp_cells_w * screen_zone.h/screen_zone.w) / 2);
         
         bmp_zone.x = left_cell * cell_w;
         bmp_zone.y = top_cell * cell_h;
         bmp_zone.w = bmp_cells_w * cell_w;
         bmp_zone.h = (bmp_zone.w * screen_zone.h)/screen_zone.w;
         bmp_zone_targ = bmp_zone;
+        make_inside(bmp_zone, vbmp_zone);
 
         zoom_ratio_x = double(screen_zone.w) / bmp_zone.w;
         zoom_ratio_y = double(screen_zone.h) / bmp_zone.h;
@@ -1686,6 +1687,44 @@ uint16 get_char_uni(WPARAM wp)
     return my_chars[0];
 }
 
+bool handle_file_saving(opn_sav_dlg& dlg)
+{
+    if (dlg.fslctd_idx != -1 && dlg.files_q[dlg.fslctd_idx].second)
+        dlg.go_slctd_dir();
+    else
+    {
+        std::wstring file_path = dlg.curr_dir.substr(0, dlg.curr_dir.size() - 1) + dlg.txt_edit.str;
+        if (check_ext(dlg.txt_edit.str, L".gif"))
+        {
+            from_to(save_file, gif_sav_info);
+            gif_path = file_path;
+            draw_diag_mesh(grey, 5);
+        }
+        else if (check_ext(dlg.txt_edit.str, L".txt"))
+        {
+            std::wofstream my_file;
+            my_file.open(file_path);
+
+            if (my_file.is_open())
+            {
+                for (int i = 0; i < nb_cell_w; i++)
+                    for (int j = 0; j < nb_cell_h; j++)
+                        my_file << grid[j * nb_cell_w + i] << " ";
+            }
+            my_file.close();
+            from_to(save_file, normal_mode);
+            my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
+            step_edit.slct_idx = step_edit.curs_idx = 0;
+            return true;
+        }
+        else
+        {
+            from_to(save_file, save_ext_err);
+        }
+    }
+    return false;
+}
+
 LRESULT CALLBACK
 wnd_callback(HWND wnd,
     UINT msg,
@@ -1908,69 +1947,7 @@ wnd_callback(HWND wnd,
             else if (save_file)
             {
                 if (in_zone(mouse_coords_ldown, savf_dlg.open_zone) && in_zone(mouse_coords_lup, savf_dlg.open_zone))
-                {
-                    if (savf_dlg.fslctd_idx != -1)
-                    {
-                        if (savf_dlg.files_q[savf_dlg.fslctd_idx].second)
-                            savf_dlg.go_slctd_dir();
-                        else
-                        {
-                            std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
-                            if (check_ext(savf_dlg.txt_edit.str, L".gif"))
-                            {
-                                from_to(save_file, gif_sav_info);
-                                gif_path = file_path;
-                                draw_diag_mesh(grey, 5);
-                            }
-                            else
-                            {
-                                std::wofstream my_file;
-                                my_file.open(file_path);
-
-                                if (my_file.is_open())
-                                {
-                                    for (int i = 0; i < nb_cell_w; i++)
-                                        for (int j = 0; j < nb_cell_h; j++)
-                                            my_file << grid[j * nb_cell_w + i] << " ";
-                                }
-                                my_file.close();
-                                from_to(save_file, normal_mode);
-                                my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
-                                step_edit.slct_idx = step_edit.curs_idx = 0;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
-                        if (check_ext(savf_dlg.txt_edit.str, L".gif"))
-                        {
-                            from_to(save_file, gif_sav_info);
-                            gif_path = file_path;
-                            draw_diag_mesh(grey, 5);
-                        }
-                        else if (check_ext(savf_dlg.txt_edit.str, L".txt"))
-                        {
-                            std::wofstream my_file;
-                            my_file.open(file_path);
-
-                            if (my_file.is_open())
-                            {
-                                for (int i = 0; i < nb_cell_w; i++)
-                                    for (int j = 0; j < nb_cell_h; j++)
-                                        my_file << grid[j * nb_cell_w + i] << " ";
-                            }
-                            my_file.close();
-                            from_to(save_file, normal_mode);
-                            my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
-                            step_edit.slct_idx = step_edit.curs_idx = 0;
-                        }
-                        else
-                        {
-                            from_to(save_file, save_ext_err);
-                        }
-                    }
-                }
+                    handle_file_saving(savf_dlg);
                 else if (in_zone(mouse_coords_ldown, savf_dlg.cancel_zone) && in_zone(mouse_coords_lup, savf_dlg.cancel_zone))
                 {
                     from_to(save_file, normal_mode);
@@ -2138,38 +2115,8 @@ wnd_callback(HWND wnd,
                 int idx_f = (mouse_coords.y - savf_dlg.fhref) / savf_dlg.file_h;
                 if (idx_f < savf_dlg.nb_files)
                 {
-                    if (savf_dlg.files_q[idx_f].second)
-                    {
-                        savf_dlg.fslctd_idx = idx_f;
-                        savf_dlg.go_slctd_dir();
-                    }
-                    else
-                    {
-                        std::wstring file_path = savf_dlg.curr_dir.substr(0, savf_dlg.curr_dir.size() - 1) + savf_dlg.txt_edit.str;
-                        if (check_ext(savf_dlg.txt_edit.str, L".gif"))
-                        {
-                            from_to(save_file, gif_sav_info);
-                            gif_path = file_path;
-                            draw_diag_mesh(grey, 5);
-                        }
-                        else
-                        {
-                            std::wofstream my_file;
-                            my_file.open(file_path);
-
-                            if (my_file.is_open())
-                            {
-                                for (int i = 0; i < nb_cell_w; i++)
-                                    for (int j = 0; j < nb_cell_h; j++)
-                                        my_file << grid[j * nb_cell_w + i] << " ";
-                            }
-                            my_file.close();
-                            from_to(save_file, normal_mode);
-                            my_cursor.scr_zone = { step_edit.txt_zone.x , step_edit.txt_zone.y, 2, step_edit.txt_zone.h };
-                            step_edit.slct_idx = step_edit.curs_idx = 0;
-                            del_mouse_lup = true;
-                        }
-                    }
+                    if(handle_file_saving(savf_dlg))
+                        del_mouse_lup = true;
                 }
             }
             else if(in_zone(mouse_coords_ldown, savf_dlg.txt_edit.zone))
@@ -2263,18 +2210,35 @@ wnd_callback(HWND wnd,
             {
                 if (!slct_mode)
                 {
-                    if (std::iswdigit(my_char))
+                    if (wp == VK_RETURN)
+                    {
+                        target_step = get_step_int();
+                        from_to(normal_mode, go_mode);
+                        if (target_step < prv_targ_stp || target_step < actual_step)
+                        {
+                            reinit_grid();
+                            actual_step = 0;
+                        }
+                    }
+                    else if (std::iswdigit(my_char))
                         step_edit.add_char(my_char);
-                    step_edit.handle_arrows(wp);
+                    else
+                        step_edit.handle_arrows(wp);
                 }
             }
             else if (save_file)
             {
                 if (!slct_mode)
                 {
-                    if (iswprint(my_char))
+                    if (wp == VK_RETURN)
+                    {
+                        handle_file_saving(savf_dlg);
+                        show_cursor = false;
+                    }
+                    else if (iswprint(my_char))
                         savf_dlg.txt_edit.add_char(my_char);
-                    savf_dlg.txt_edit.handle_arrows(wp);
+                    else
+                        savf_dlg.txt_edit.handle_arrows(wp);
                 }
             }
             else if (gif_params_collect)
